@@ -91,7 +91,11 @@ export default function HomePage() {
     completed: "Procedure completed successfully.",
   };
 
-  const procedureSteps = latest?.procedure_steps || [];
+  const procedureSteps = latest?.procedure_steps || [
+    { id: "grip_init", dwell_time_ms: 700 },
+    { id: "hold_steady", dwell_time_ms: 3000 },
+    { id: "completed", dwell_time_ms: 0 },
+  ];
   const effectiveStepId = latest?.reset ? procedureSteps[0]?.id : latest?.step;
   const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
 
@@ -155,18 +159,18 @@ export default function HomePage() {
             <CameraFeed compact />
             <HandOverlay />
             {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
-          </div>
 
-          <div className="status-card">
-            <div className="status-icon">A</div>
-            <div>
-              <p className="status-title">AI Calibration Active</p>
-              <p className="status-subtitle">{primaryFeedback}</p>
-            </div>
-            <div className="status-bars" aria-hidden="true">
-              <span />
-              <span />
-              <span />
+            <div className="status-card status-card--stage">
+              <div className="status-icon">A</div>
+              <div>
+                <p className="status-title">AI Calibration Active</p>
+                <p className="status-subtitle">{primaryFeedback}</p>
+              </div>
+              <div className="status-bars" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
           </div>
         </section>

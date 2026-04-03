@@ -151,7 +151,7 @@ body {
 }
 
 .hand-stage {
-  height: 540px;
+  height: 620px;
   border-radius: 24px;
   background: radial-gradient(circle at 55% 52%, #1f5f73 0%, #0f3747 45%, #071f2a 100%);
   border: 1px solid #1d4655;
@@ -223,10 +223,6 @@ body {
 }
 
 .status-card {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 22px;
   width: min(92%, 490px);
   display: grid;
   grid-template-columns: 34px 1fr auto;
@@ -236,6 +232,16 @@ body {
   border: 1px solid #d4e7ea;
   border-radius: 18px;
   padding: 14px 16px;
+}
+
+.status-card--stage {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  z-index: 5;
+  background: rgba(246, 251, 251, 0.92);
+  backdrop-filter: blur(10px);
 }
 
 .status-icon {
@@ -535,13 +541,11 @@ body {
   }
 
   .hand-stage {
-    height: 430px;
+    height: 500px;
   }
 
-  .status-card {
-    position: static;
-    transform: none;
-    width: 100%;
-    margin-top: 12px;
+  .status-card--stage {
+    width: min(94%, 520px);
+    bottom: 12px;
   }
 }

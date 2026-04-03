@@ -48,12 +48,20 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     source_landmarks = request.landmarks if request.landmarks else camera_runtime.latest_landmarks()
 
     if not source_landmarks:
+        # Important: even when no hand is detected, still return the procedure steps
+        # so the frontend can render a consistent checklist (STEP 1 OF N).
+        schema = load_procedure_schema(request.procedure_id)
+        procedure_steps = [
+            StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
+        ]
         return FrameResponse(
-            step="step_1",
+            step=schema.steps[0].id,
             valid=False,
             score=0.0,
             feedback=[],
             landmarks=[],
+            procedure_steps=procedure_steps,
+            reset=False,
         )
 
     normalized = normalize_landmarks(source_landmarks)
