@@ -26,6 +26,8 @@ class FrameResponse(BaseModel):
     score: float
     feedback: list[FeedbackItem]
     landmarks: list[list[float]] = []
+    joint_confidence: dict[str, float] = {}
+    landmarks_estimated: bool = False
     angles: dict[str, float] = {}
     distances: dict[str, float] = {}
     procedure_steps: list[StepInfo] = []
