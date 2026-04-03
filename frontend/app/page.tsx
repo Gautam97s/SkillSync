@@ -11,6 +11,12 @@ type LandmarksDetail = {
 };
 
 type OverlayVariant = "good" | "warn" | "bad";
+type Difficulty = "beginner" | "intermediate";
+
+const ANGLE_RANGES: Record<Difficulty, { incision: [number, number]; cutting: [number, number] }> = {
+  beginner:     { incision: [60, 120], cutting: [30, 60] },
+  intermediate: { incision: [70, 110], cutting: [30, 45] },
+};
 
 function evaluateMax(
   value: number | undefined,
@@ -61,10 +67,13 @@ function getStepOverlayVariant(
   stepId: string | undefined,
   angles: Record<string, number> | undefined,
   distances: Record<string, number> | undefined,
+  difficulty: Difficulty,
 ): OverlayVariant {
   if (!stepId) {
     return "warn";
   }
+
+  const { incision, cutting } = ANGLE_RANGES[difficulty];
 
   switch (stepId) {
     case "thumb_index_precision_grip":
@@ -79,14 +88,14 @@ function getStepOverlayVariant(
     }
 
     case "initial_incision_position":
-      return evaluateRange(angles?.wrist_index_angle, 70, 110, 10);
+      return evaluateRange(angles?.wrist_index_angle, incision[0], incision[1], 10);
 
     case "cutting_angle_control":
-      return evaluateRange(angles?.wrist_index_angle, 20, 70, 10);
+      return evaluateRange(angles?.wrist_index_angle, cutting[0], cutting[1], 10);
 
     case "grip_stability": {
       const checks: OverlayVariant[] = [
-        evaluateRange(angles?.wrist_index_angle, 20, 70, 10),
+        evaluateRange(angles?.wrist_index_angle, cutting[0], cutting[1], 10),
         evaluateMax(distances?.thumb_index_over_palm, 0.35, 0.1),
         evaluateMax(distances?.index_middle_over_palm, 0.6, 0.12),
       ];
@@ -105,6 +114,8 @@ export default function HomePage() {
   const { connected, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
   const landmarksRef = useRef<number[][]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
+  const difficultyRef = useRef<Difficulty>("beginner");
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -137,6 +148,7 @@ export default function HomePage() {
         timestamp_ms: now,
         landmarks: landmarksRef.current,
         procedure_id: "surgical_knot_tying",
+        difficulty: difficultyRef.current,
       });
       frameCounter.current += 1;
     };
@@ -298,6 +310,7 @@ export default function HomePage() {
     effectiveStepId,
     latest?.angles,
     latest?.distances,
+    difficulty,
   );
   const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
 
@@ -354,6 +367,25 @@ export default function HomePage() {
           <div className="viewer-badges">
             <span className="badge badge-live">{connected ? "LIVE TRACKING" : "OFFLINE"}</span>
             <span className="badge badge-stream">FHD STREAM</span>
+
+            <div className="diff-inline" role="radiogroup" aria-label="Difficulty level">
+              <button
+                id="difficulty-beginner"
+                className={`diff-pill ${difficulty === "beginner" ? "diff-pill--active" : ""}`}
+                onClick={() => { setDifficulty("beginner"); difficultyRef.current = "beginner"; }}
+                aria-pressed={difficulty === "beginner"}
+              >
+                🟢 Beginner
+              </button>
+              <button
+                id="difficulty-intermediate"
+                className={`diff-pill ${difficulty === "intermediate" ? "diff-pill--active" : ""}`}
+                onClick={() => { setDifficulty("intermediate"); difficultyRef.current = "intermediate"; }}
+                aria-pressed={difficulty === "intermediate"}
+              >
+                🔶 Intermediate
+              </button>
+            </div>
           </div>
 
           <div className="hand-stage" aria-label="Live hand stage">
@@ -407,6 +439,7 @@ export default function HomePage() {
               </div>
             </div>
           </article>
+
 
           <article className="steps-card">
             <div className="steps-head">

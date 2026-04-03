@@ -313,7 +313,7 @@ body {
 
 .insights-panel {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   align-content: start;
 }
 
@@ -322,8 +322,8 @@ body {
 .steps-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 12px 14px;
 }
 
 .metric-head {
@@ -352,15 +352,15 @@ body {
 }
 
 .metric-value {
-  margin: 12px 0 2px;
-  font-size: 54px;
+  margin: 6px 0 2px;
+  font-size: 38px;
   line-height: 0.95;
   font-family: var(--font-figtree), "Segoe UI", sans-serif;
   font-weight: 700;
 }
 
 .metric-value span {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   color: #5e7e88;
 }
@@ -372,8 +372,8 @@ body {
 }
 
 .progress-track {
-  margin-top: 14px;
-  height: 4px;
+  margin-top: 8px;
+  height: 3px;
   width: 100%;
   border-radius: 99px;
   background: #dbeff1;
@@ -389,22 +389,22 @@ body {
 
 .angles-card h2,
 .steps-card h2 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-family: var(--font-figtree), "Segoe UI", sans-serif;
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .angles-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .angles-grid div {
-  border-radius: 10px;
+  border-radius: 8px;
   background: #ecf6f7;
   border: 1px solid #d6e8ea;
-  padding: 10px;
+  padding: 8px;
 }
 
 .angles-grid p {
@@ -417,8 +417,8 @@ body {
 
 .angles-grid strong {
   display: block;
-  margin-top: 6px;
-  font-size: 24px;
+  margin-top: 4px;
+  font-size: 20px;
   font-family: var(--font-figtree), "Segoe UI", sans-serif;
 }
 
@@ -426,7 +426,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .steps-head span {
@@ -443,19 +443,19 @@ body {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .step-row {
   display: grid;
-  grid-template-columns: 22px 1fr;
+  grid-template-columns: 18px 1fr;
   align-items: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .step-dot {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   border: 2px solid #bdd7dd;
   margin-top: 2px;
@@ -463,13 +463,13 @@ body {
 
 .step-row p {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .step-row small {
   color: #6e8a93;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .step-row.done .step-dot {
@@ -480,8 +480,8 @@ body {
 .step-row.active {
   background: #f1fafb;
   border: 1px solid #d2e8eb;
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 8px;
 }
 
 .step-row.active .step-dot {
@@ -491,6 +491,42 @@ body {
 
 .step-row.pending {
   opacity: 0.55;
+}
+
+/* ── Difficulty-level inline pills ─────────────────────────── */
+.diff-inline {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.diff-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid #d3e5e7;
+  background: #fff;
+  color: #53717b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.diff-pill:hover {
+  border-color: #a0cdd4;
+  background: #edf7f8;
+}
+
+.diff-pill--active {
+  border-color: var(--primary);
+  background: linear-gradient(120deg, #067f9f, #0e9fc6);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.22);
 }
 
 .primary-cta {

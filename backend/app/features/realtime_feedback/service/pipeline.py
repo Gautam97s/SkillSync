@@ -71,7 +71,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
         # Important: even when no hand is detected, still return the procedure steps
         # so the frontend can render a consistent checklist (STEP 1 OF N).
-        schema = load_procedure_schema(request.procedure_id)
+        schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
         procedure_steps = [
             StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
         ]
@@ -85,6 +85,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
             distances=dict(_ZERO_DISTANCES),
             procedure_steps=procedure_steps,
             reset=True,
+            difficulty=request.difficulty,
         )
 
     normalized = normalize_landmarks(source_landmarks)
@@ -97,7 +98,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
     # 1) Determine current step/session context
-    schema = load_procedure_schema(request.procedure_id)
+    schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
     current_step_id = get_current_step_id(
         procedure_id=request.procedure_id, session_key=session_key
     )
@@ -174,4 +175,5 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
+        difficulty=request.difficulty,
     )

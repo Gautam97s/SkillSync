@@ -19,4 +19,5 @@ export type FrameResponse = {
   distances?: Record<string, number>;
   procedure_steps?: StepInfo[];
   reset?: boolean;
+  difficulty?: string;
 };
