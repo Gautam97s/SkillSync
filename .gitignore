@@ -55,3 +55,6 @@ pnpm-debug.log*
 *.tsbuildinfo
 frontend/.turbo/
 backend/.turbo/
+
+.agent/
+.next-runtime/
