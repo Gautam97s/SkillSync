@@ -86,7 +86,8 @@ export function useCamera() {
           setStreamReady(true);
           startLandmarkLoop(videoRef.current);
         }
-      } catch {
+      } catch (error) {
+        console.error("Camera access failed:", error);
         setStreamReady(false);
       }
     };
