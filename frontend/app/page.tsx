@@ -10,6 +10,97 @@ type LandmarksDetail = {
   landmarks?: number[][];
 };
 
+type OverlayVariant = "good" | "warn" | "bad";
+
+function evaluateMax(
+  value: number | undefined,
+  max: number,
+  warnSlack: number,
+): OverlayVariant {
+  if (typeof value !== "number") {
+    return "warn";
+  }
+  if (value <= max) {
+    return "good";
+  }
+  if (value <= max + warnSlack) {
+    return "warn";
+  }
+  return "bad";
+}
+
+function evaluateRange(
+  value: number | undefined,
+  min: number,
+  max: number,
+  warnSlack: number,
+): OverlayVariant {
+  if (typeof value !== "number") {
+    return "warn";
+  }
+  if (value >= min && value <= max) {
+    return "good";
+  }
+  if (value >= min - warnSlack && value <= max + warnSlack) {
+    return "warn";
+  }
+  return "bad";
+}
+
+function mergeVariant(states: OverlayVariant[]): OverlayVariant {
+  if (states.includes("bad")) {
+    return "bad";
+  }
+  if (states.includes("warn")) {
+    return "warn";
+  }
+  return "good";
+}
+
+function getStepOverlayVariant(
+  stepId: string | undefined,
+  angles: Record<string, number> | undefined,
+  distances: Record<string, number> | undefined,
+): OverlayVariant {
+  if (!stepId) {
+    return "warn";
+  }
+
+  switch (stepId) {
+    case "thumb_index_precision_grip":
+      return evaluateMax(distances?.thumb_index_over_palm, 0.35, 0.1);
+
+    case "middle_finger_support": {
+      const checks: OverlayVariant[] = [
+        evaluateMax(distances?.index_middle_over_palm, 0.6, 0.12),
+        evaluateMax(angles?.index_middle_alignment, 75, 15),
+      ];
+      return mergeVariant(checks);
+    }
+
+    case "initial_incision_position":
+      return evaluateRange(angles?.wrist_index_angle, 70, 110, 10);
+
+    case "cutting_angle_control":
+      return evaluateRange(angles?.wrist_index_angle, 20, 70, 10);
+
+    case "grip_stability": {
+      const checks: OverlayVariant[] = [
+        evaluateRange(angles?.wrist_index_angle, 20, 70, 10),
+        evaluateMax(distances?.thumb_index_over_palm, 0.35, 0.1),
+        evaluateMax(distances?.index_middle_over_palm, 0.6, 0.12),
+      ];
+      return mergeVariant(checks);
+    }
+
+    case "completed":
+      return "good";
+
+    default:
+      return "warn";
+  }
+}
+
 export default function HomePage() {
   const { connected, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
@@ -100,6 +191,13 @@ export default function HomePage() {
   const [displayAngles, setDisplayAngles] = useState({ mcp: 0, pip: 0 });
 
   useEffect(() => {
+    if (Array.isArray(latest?.landmarks) && latest.landmarks.length === 0) {
+      scoreEmaRef.current = 0;
+      displayScoreRef.current = 0;
+      setDisplayScorePercent(0);
+      return;
+    }
+
     if (latest?.score !== undefined) {
       const s = latest.score;
       scoreEmaRef.current =
@@ -108,6 +206,14 @@ export default function HomePage() {
   }, [latest?.score]);
 
   useEffect(() => {
+    if (Array.isArray(latest?.landmarks) && latest.landmarks.length === 0) {
+      angleEmaRef.current = { mcp: 0, pip: 0 };
+      angleTargetsRef.current = { mcp: 0, pip: 0 };
+      angleDisplayRef.current = { mcp: 0, pip: 0 };
+      setDisplayAngles({ mcp: 0, pip: 0 });
+      return;
+    }
+
     const a = latest?.angles;
     if (!a) {
       return;
@@ -173,21 +279,12 @@ export default function HomePage() {
   const scorePercent = displayScorePercent;
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
-  const mcp = latest?.angles?.mcp_joint;
-  const MCP_MIN = 20;
-  const MCP_MAX = 45;
-  const overlayVariant: "good" | "warn" | "bad" =
-    typeof mcp !== "number"
-      ? "warn"
-      : mcp >= MCP_MIN && mcp <= MCP_MAX
-        ? "good"
-        : mcp > MCP_MAX && mcp <= 60
-          ? "warn"
-          : "bad";
-
   const stepDescriptions: Record<string, string> = {
-    grip_init: "Establish initial grip with proper finger positioning.",
-    hold_steady: "Maintain the grip between 30 and 45 degrees for 3 seconds.",
+    thumb_index_precision_grip: "Keep thumb and index finger close for precision grip.",
+    middle_finger_support: "Use middle finger as supporting finger near index.",
+    initial_incision_position: "Start with near-perpendicular tool orientation.",
+    cutting_angle_control: "Maintain controlled cutting angle during motion.",
+    grip_stability: "Hold the validated grip steadily.",
     completed: "Procedure completed successfully.",
   };
 
@@ -197,6 +294,11 @@ export default function HomePage() {
     { id: "completed", dwell_time_ms: 0 },
   ];
   const effectiveStepId = latest?.reset ? procedureSteps[0]?.id : latest?.step;
+  const overlayVariant = getStepOverlayVariant(
+    effectiveStepId,
+    latest?.angles,
+    latest?.distances,
+  );
   const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
 
   const steps = procedureSteps.map((step, index) => {
@@ -324,9 +426,6 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
-
-            <button className="primary-cta">Continue Procedure</button>
-            <button className="text-cta">Save and Exit Session</button>
           </article>
         </aside>
       </section>

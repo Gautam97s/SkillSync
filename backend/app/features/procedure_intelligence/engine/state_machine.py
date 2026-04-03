@@ -50,6 +50,21 @@ def get_session_state(
     return state
 
 
+def reset_session(
+    *,
+    procedure_id: str = "surgical_knot_tying",
+    session_key: str | None = None,
+) -> SessionState:
+    """
+    Reset a procedure session back to the first step.
+    """
+    schema = load_procedure_schema(procedure_id)
+    key = session_key or procedure_id
+    state = SessionState(current_step_id=schema.steps[0].id)
+    SESSIONS[key] = state
+    return state
+
+
 def update_step(
     *,
     procedure_id: str = "surgical_knot_tying",
