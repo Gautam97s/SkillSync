@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 // import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
@@ -83,7 +83,94 @@ export default function HomePage() {
     };
   }, [connected, send]);
 
-  const scorePercent = Math.max(0, Math.min(100, Math.round((latest?.score ?? 0.942) * 100)));
+  // Score + joint readouts: smooth **display only** (skeleton overlay stays raw / in sync with camera).
+  const scoreEmaRef = useRef(0.942);
+  const displayScoreRef = useRef(94);
+  /** Smoothed targets (EMA on server angles) — display lerps toward these in rAF. */
+  const angleEmaRef = useRef<{ mcp: number | null; pip: number | null }>({
+    mcp: null,
+    pip: null,
+  });
+  const angleTargetsRef = useRef<{ mcp: number | null; pip: number | null }>({
+    mcp: null,
+    pip: null,
+  });
+  const angleDisplayRef = useRef({ mcp: 0, pip: 0 });
+  const [displayScorePercent, setDisplayScorePercent] = useState(94);
+  const [displayAngles, setDisplayAngles] = useState({ mcp: 0, pip: 0 });
+
+  useEffect(() => {
+    if (latest?.score !== undefined) {
+      const s = latest.score;
+      scoreEmaRef.current =
+        scoreEmaRef.current * 0.97 + Math.max(0, Math.min(1, s)) * 0.03;
+    }
+  }, [latest?.score]);
+
+  useEffect(() => {
+    const a = latest?.angles;
+    if (!a) {
+      return;
+    }
+    // Calm noisy angle streams: heavy EMA on raw readings before display interpolation.
+    const NEW_WEIGHT = 0.085;
+    const blend = (prev: number | null, reading: number) =>
+      prev === null ? reading : prev * (1 - NEW_WEIGHT) + reading * NEW_WEIGHT;
+
+    if (typeof a.mcp_joint === "number") {
+      angleEmaRef.current.mcp = blend(angleEmaRef.current.mcp, a.mcp_joint);
+      angleTargetsRef.current.mcp = angleEmaRef.current.mcp;
+    }
+    if (typeof a.pip_joint === "number") {
+      angleEmaRef.current.pip = blend(angleEmaRef.current.pip, a.pip_joint);
+      angleTargetsRef.current.pip = angleEmaRef.current.pip;
+    }
+  }, [latest?.angles]);
+
+  useEffect(() => {
+    let raf = 0;
+    /** Per-frame lerp toward smoothed target (lower = calmer numbers). */
+    const ANGLE_RATE = 0.052;
+    const ANGLE_SNAP_DEG = 0.18;
+    const tick = () => {
+      const target = Math.max(
+        0,
+        Math.min(100, Math.round(scoreEmaRef.current * 100)),
+      );
+      const prev = displayScoreRef.current;
+      const next = prev + (target - prev) * 0.045;
+      displayScoreRef.current =
+        Math.abs(target - next) < 0.25 ? target : next;
+      setDisplayScorePercent(Math.round(displayScoreRef.current));
+
+      let { mcp: mcpD, pip: pipD } = angleDisplayRef.current;
+      const tm = angleTargetsRef.current.mcp;
+      const tp = angleTargetsRef.current.pip;
+      if (tm !== null) {
+        mcpD = mcpD + (tm - mcpD) * ANGLE_RATE;
+        if (Math.abs(tm - mcpD) < ANGLE_SNAP_DEG) {
+          mcpD = tm;
+        }
+      }
+      if (tp !== null) {
+        pipD = pipD + (tp - pipD) * ANGLE_RATE;
+        if (Math.abs(tp - pipD) < ANGLE_SNAP_DEG) {
+          pipD = tp;
+        }
+      }
+      angleDisplayRef.current = { mcp: mcpD, pip: pipD };
+      setDisplayAngles({
+        mcp: Math.round(mcpD * 10) / 10,
+        pip: Math.round(pipD * 10) / 10,
+      });
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const scorePercent = displayScorePercent;
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
   const mcp = latest?.angles?.mcp_joint;
@@ -199,7 +286,7 @@ export default function HomePage() {
               {scorePercent}
               <span>%</span>
             </p>
-            <p className="metric-label">Stability Confidence Score</p>
+            <p className="metric-label">Grip Stability Confidence Score</p>
             <div className="progress-track">
               <span style={{ width: `${scorePercent}%` }} />
             </div>
@@ -210,15 +297,11 @@ export default function HomePage() {
             <div className="angles-grid">
               <div>
                 <p>MCP JOINT</p>
-                <strong>
-                  {latest?.angles?.mcp_joint?.toFixed(1) || "0.0"} deg
-                </strong>
+                <strong>{displayAngles.mcp.toFixed(1)} deg</strong>
               </div>
               <div>
                 <p>PIP JOINT</p>
-                <strong>
-                  {latest?.angles?.pip_joint?.toFixed(1) || "0.0"} deg
-                </strong>
+                <strong>{displayAngles.pip.toFixed(1)} deg</strong>
               </div>
             </div>
           </article>
