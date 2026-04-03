@@ -160,12 +160,16 @@ body {
 }
 
 .stage-video {
+  display: block;
   position: absolute;
   inset: 0;
   width: 100%;
+  min-width: 100%;
   height: 100%;
+  min-height: 100%;
   object-fit: cover;
-  opacity: 0.82;
+  object-position: center;
+  opacity: 1;
   transform: scaleX(-1);
   z-index: 1;
 }
@@ -178,6 +182,7 @@ body {
   pointer-events: none;
   transform: scaleX(-1);
   z-index: 2;
+  background: transparent;
 }
 
 .stage-empty {
