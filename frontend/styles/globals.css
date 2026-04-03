@@ -1,0 +1,87 @@
+:root {
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --accent: #0f766e;
+  --ok: #166534;
+  --warn: #92400e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  color: var(--text);
+  background: linear-gradient(120deg, #eef2f7 0%, #f8fafc 100%);
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+.left-panel,
+.right-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.video {
+  width: 100%;
+  max-height: 360px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.overlay-placeholder {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  min-height: 180px;
+  display: grid;
+  place-content: center;
+  color: var(--muted);
+}
+
+.step-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.step-completed strong {
+  color: var(--ok);
+}
+
+.step-active strong {
+  color: var(--accent);
+}
+
+.step-pending strong {
+  color: var(--warn);
+}
+
+@media (max-width: 920px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+}

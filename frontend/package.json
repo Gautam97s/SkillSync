@@ -1,0 +1,22 @@
+{
+  "name": "gripsense-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.32",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "@types/node": "22.15.23",
+    "@types/react": "18.3.23",
+    "@types/react-dom": "18.3.7"
+  }
+}
