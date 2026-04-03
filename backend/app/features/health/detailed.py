@@ -7,7 +7,7 @@ def check_python_version() -> dict[str, Any]:
     """Check Python version."""
     version = sys.version
     major, minor, micro = sys.version_info[:3]
-    
+
     return {
         "status": "ok" if major >= 3 and minor >= 10 else "warning",
         "version": version,
@@ -21,11 +21,10 @@ def check_mediapipe() -> dict[str, Any]:
     """Check if MediaPipe is installed and working."""
     try:
         import mediapipe as mp
-        
-        # Try to access the hand landmarker
+
         BaseOptions = mp.tasks.BaseOptions
         HandLandmarker = mp.tasks.vision.HandLandmarker
-        
+
         return {
             "status": "ok",
             "version": mp.__version__
@@ -46,7 +45,7 @@ def check_opencv() -> dict[str, Any]:
     """Check if OpenCV is installed."""
     try:
         import cv2
-        
+
         return {
             "status": "ok",
             "version": cv2.__version__
@@ -59,32 +58,60 @@ def check_opencv() -> dict[str, Any]:
 
 
 def check_camera() -> dict[str, Any]:
-    """Check if camera is accessible."""
+    """Check camera status using the shared CameraRuntime singleton."""
     try:
-        import cv2
-        
-        cap = cv2.VideoCapture(0)
-        
-        if cap.isOpened():
-            ret, frame = cap.read()
-            cap.release()
-            
-            if ret and frame is not None:
-                height, width = frame.shape[:2]
+        from app.features.hand_tracking.service.camera_runtime import get_camera_runtime
+
+        runtime = get_camera_runtime()
+
+        if runtime.is_running():
+            landmarks = runtime.latest_landmarks()
+            timestamp = runtime.latest_timestamp_ms()
+
+            if landmarks and len(landmarks) == 21:
                 return {
                     "status": "ok",
-                    "resolution": f"{width}x{height}"
+                    "detail": "Camera running and detecting hand",
+                    "landmarks_count": len(landmarks),
+                    "last_timestamp_ms": timestamp
+                }
+            elif timestamp > 0:
+                return {
+                    "status": "warning",
+                    "detail": "Camera running but no hand detected in current frame",
+                    "last_timestamp_ms": timestamp
                 }
             else:
                 return {
                     "status": "warning",
-                    "detail": "Camera opened but could not read frame"
+                    "detail": "Camera runtime started but no frames captured yet"
                 }
         else:
-            return {
-                "status": "unavailable",
-                "detail": "No camera found or camera in use by another application"
-            }
+            # Camera runtime exists but is not running - try to find out why
+            import cv2
+
+            cap = cv2.VideoCapture(0)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+
+                if ret and frame is not None:
+                    return {
+                        "status": "error",
+                        "detail": "Camera hardware available but CameraRuntime failed to start. Check server logs."
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "detail": "Camera device found but cannot read frames"
+                    }
+            else:
+                cap.release()
+                return {
+                    "status": "error",
+                    "detail": "No camera device found. Please connect a camera."
+                }
+
     except Exception as e:
         return {
             "status": "error",
@@ -101,9 +128,9 @@ def check_model_file() -> dict[str, Any]:
         "cv",
         "hand_landmarker.task"
     )
-    
+
     abs_path = os.path.abspath(model_path)
-    
+
     if os.path.exists(abs_path):
         size_mb = os.path.getsize(abs_path) / (1024 * 1024)
         return {
@@ -130,23 +157,24 @@ def check_feature_modules() -> dict[str, Any]:
         ("rules", "app.features.procedure_intelligence.engine.rules", "validate_step"),
         ("feedback", "app.features.procedure_intelligence.engine.feedback", "generate_feedback"),
         ("scoring", "app.features.procedure_intelligence.engine.scoring", "compute_score"),
+        ("stability", "app.features.procedure_intelligence.engine.stability", "StabilityScorer"),
         ("pipeline", "app.features.realtime_feedback.service.pipeline", "process_frame"),
     ]
-    
+
     results = {}
     all_ok = True
-    
+
     for name, module_path, function_name in modules_to_check:
         try:
             module = __import__(module_path, fromlist=[function_name])
             func = getattr(module, function_name, None)
-            
+
             if func is not None:
                 results[name] = {"status": "ok"}
             else:
                 results[name] = {
                     "status": "error",
-                    "detail": f"Function '{function_name}' not found in module"
+                    "detail": f"'{function_name}' not found in module"
                 }
                 all_ok = False
         except ImportError as e:
@@ -161,7 +189,7 @@ def check_feature_modules() -> dict[str, Any]:
                 "detail": f"Unexpected error: {str(e)}"
             }
             all_ok = False
-    
+
     return {
         "status": "ok" if all_ok else "degraded",
         "modules": results
@@ -170,7 +198,7 @@ def check_feature_modules() -> dict[str, Any]:
 
 def run_detailed_health_check() -> dict[str, Any]:
     """Run all health checks and return comprehensive report."""
-    
+
     checks = {
         "python": check_python_version(),
         "mediapipe": check_mediapipe(),
@@ -179,20 +207,19 @@ def run_detailed_health_check() -> dict[str, Any]:
         "model_file": check_model_file(),
         "feature_modules": check_feature_modules()
     }
-    
-    # Determine overall status
+
     statuses = []
     for key, value in checks.items():
         if isinstance(value, dict) and "status" in value:
             statuses.append(value["status"])
-    
+
     if all(s == "ok" for s in statuses):
         overall_status = "healthy"
     elif any(s == "error" for s in statuses):
         overall_status = "unhealthy"
     else:
         overall_status = "degraded"
-    
+
     return {
         "status": overall_status,
         "checks": checks

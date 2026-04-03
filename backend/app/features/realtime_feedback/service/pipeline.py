@@ -1,3 +1,5 @@
+from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
+from app.features.realtime_feedback.schemas.response import FatigueInfo
 from app.features.hand_tracking.cv.landmarks import normalize_landmarks
 from app.features.hand_tracking.feature_engineering.angles import compute_angles
 from app.features.hand_tracking.feature_engineering.distances import compute_distances
@@ -20,6 +22,7 @@ from app.features.realtime_feedback.schemas.response import FrameResponse, StepI
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
 _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
 
+_FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
 
 def _smooth_metric_map(
     *,
@@ -141,6 +144,27 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
     ]
 
+        # 6) Fatigue detection
+    fatigue_key = session_key or request.procedure_id
+    fatigue_detector = _FATIGUE_BY_SESSION.get(fatigue_key)
+    if fatigue_detector is None:
+        fatigue_detector = FatigueDetector()
+        fatigue_detector.start_session()
+        _FATIGUE_BY_SESSION[fatigue_key] = fatigue_detector
+
+    fatigue_assessment = fatigue_detector.update(
+        stability_score=stability,
+        had_error=not validation_now.valid,
+    )
+
+    fatigue_info = FatigueInfo(
+        fatigue_level=fatigue_assessment.fatigue_level.value,
+        fatigue_score=fatigue_assessment.fatigue_score,
+        recommended_break_seconds=fatigue_assessment.recommended_break_seconds,
+        session_minutes=round(fatigue_detector.session_minutes, 1),
+        warning_message=fatigue_assessment.warning_message,
+    )
+
     return FrameResponse(
         step=step_update.step_now,
         valid=validation_now.valid,
@@ -151,4 +175,5 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
+        fatigue=fatigue_info,
     )
