@@ -38,6 +38,7 @@ dist/
 ## Next.js / Node frontend
 node_modules/
 .next/
+frontend/.next-runtime/
 out/
 dist/
 coverage/
@@ -55,3 +56,6 @@ pnpm-debug.log*
 *.tsbuildinfo
 frontend/.turbo/
 backend/.turbo/
+
+.agent/
+.next-runtime/
