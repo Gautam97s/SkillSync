@@ -9,4 +9,5 @@ export type FrameResponse = {
   valid: boolean;
   score: number;
   feedback: FeedbackItem[];
+  landmarks?: number[][];
 };
