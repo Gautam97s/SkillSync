@@ -12,3 +12,4 @@ class FrameResponse(BaseModel):
     valid: bool
     score: float
     feedback: list[FeedbackItem]
+    landmarks: list[list[float]] = []

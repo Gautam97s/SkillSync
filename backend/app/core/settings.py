@@ -7,6 +7,8 @@ class Settings(BaseModel):
     app_name: str = "GripSense API"
     app_version: str = "0.1.0"
     camera_fps: int = 30
+    camera_device_index: int = 0
+    auto_start_camera: bool = True
     smoothing_window: int = 5
 
 
