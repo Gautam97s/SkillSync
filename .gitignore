@@ -57,5 +57,5 @@ pnpm-debug.log*
 frontend/.turbo/
 backend/.turbo/
 
-
 .agent/
+.next-runtime/
