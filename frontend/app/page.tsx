@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
@@ -8,8 +8,6 @@ import { useTelemetry } from "../shared/contexts/TelemetryContext";
 type LandmarksDetail = {
   landmarks?: number[][];
 };
-
-const PROCEDURE_STEPS = ["step_1", "step_2", "step_3", "completed"];
 
 export default function HomePage() {
   const { connected, latest, send } = useTelemetry();
@@ -46,7 +44,7 @@ export default function HomePage() {
         frame_id: frameCounter.current,
         timestamp_ms: now,
         landmarks: landmarksRef.current,
-        procedure_id: "default_procedure",
+        procedure_id: "surgical_knot_tying",
       });
       frameCounter.current += 1;
     };
@@ -84,36 +82,37 @@ export default function HomePage() {
     };
   }, [connected, send]);
 
-  const currentStepIndex = useMemo(() => {
-    const idx = PROCEDURE_STEPS.indexOf(latest?.step ?? "step_1");
-    return idx < 0 ? 0 : idx;
-  }, [latest?.step]);
-
   const scorePercent = Math.max(0, Math.min(100, Math.round((latest?.score ?? 0.942) * 100)));
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
-  const steps = [
-    {
-      title: "Initialization",
-      detail: "Patient ID and setup verified.",
-      state: currentStepIndex >= 0 ? "done" : "pending",
-    },
-    {
-      title: "Surface Prep",
-      detail: "Tracking sensors calibrated.",
-      state: currentStepIndex >= 1 ? "done" : "pending",
-    },
-    {
-      title: "Precision Alignment",
-      detail: "Align MCP landmark with target zone.",
-      state: currentStepIndex === 2 ? "active" : currentStepIndex > 2 ? "done" : "pending",
-    },
-    {
-      title: "Application",
-      detail: "Pending alignment step.",
-      state: currentStepIndex === 3 ? "active" : currentStepIndex > 3 ? "done" : "pending",
-    },
-  ];
+  const stepDescriptions: Record<string, string> = {
+    grip_init: "Establish initial grip with proper finger positioning.",
+    hold_steady: "Maintain the grip between 30 and 45 degrees for 3 seconds.",
+    completed: "Procedure completed successfully.",
+  };
+
+  const procedureSteps = latest?.procedure_steps || [];
+  const effectiveStepId = latest?.reset ? procedureSteps[0]?.id : latest?.step;
+  const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
+
+  const steps = procedureSteps.map((step, index) => {
+
+    let state: "pending" | "active" | "done" = "pending";
+    if (effectiveStepId === step.id) {
+      state = "active";
+    } else if (index < currentStepIndex) {
+      state = "done";
+    }
+
+    return {
+      title: step.id
+        .split("_")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" "),
+      detail: stepDescriptions[step.id] || `Step ${index + 1}`,
+      state,
+    };
+  });
 
   return (
     <main className="dashboard-shell">
@@ -193,11 +192,15 @@ export default function HomePage() {
             <div className="angles-grid">
               <div>
                 <p>MCP JOINT</p>
-                <strong>12.4 deg</strong>
+                <strong>
+                  {latest?.angles?.mcp_joint?.toFixed(1) || "0.0"} deg
+                </strong>
               </div>
               <div>
                 <p>PIP JOINT</p>
-                <strong>45.8 deg</strong>
+                <strong>
+                  {latest?.angles?.pip_joint?.toFixed(1) || "0.0"} deg
+                </strong>
               </div>
             </div>
           </article>
@@ -205,7 +208,9 @@ export default function HomePage() {
           <article className="steps-card">
             <div className="steps-head">
               <h2>Procedure Steps</h2>
-              <span>STEP 3 OF 5</span>
+              <span>
+                STEP {Math.max(1, currentStepIndex + 1)} OF {procedureSteps.length}
+              </span>
             </div>
             <ul className="steps-list">
               {steps.map((step) => (

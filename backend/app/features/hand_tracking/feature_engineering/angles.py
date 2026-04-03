@@ -20,6 +20,8 @@ def compute_angles(landmarks: list[list[float]]) -> dict[str, float]:
         return {
             "thumb_index_angle": 0.0,
             "wrist_finger_angle": 0.0,
+            "mcp_joint": 0.0,
+            "pip_joint": 0.0,
         }
         
     # Thumb tip (4) to Wrist (0) to Index tip (8) angle
@@ -27,8 +29,16 @@ def compute_angles(landmarks: list[list[float]]) -> dict[str, float]:
     
     # Wrist (0) to Middle MCP (9) to Middle Tip (12) angle
     wrist_finger_angle = calculate_angle_3d(landmarks[0], landmarks[9], landmarks[12])
+    
+    # Index MCP joint: angle at landmark 5 between metacarpal (4) and PIP (6)
+    mcp_joint = calculate_angle_3d(landmarks[4], landmarks[5], landmarks[6])
+    
+    # Index PIP joint: angle at landmark 6 between MCP (5) and DIP (7)
+    pip_joint = calculate_angle_3d(landmarks[5], landmarks[6], landmarks[7])
 
     return {
         "thumb_index_angle": thumb_index_angle,
         "wrist_finger_angle": wrist_finger_angle,
+        "mcp_joint": mcp_joint,
+        "pip_joint": pip_joint,
     }

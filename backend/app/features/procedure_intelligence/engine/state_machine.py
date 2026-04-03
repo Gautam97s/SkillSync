@@ -11,6 +11,8 @@ from app.features.procedure_intelligence.engine.schema import load_procedure_sch
 class SessionState:
     current_step_id: str
     step_valid_since_ms: int | None = None
+    step_invalid_since_ms: int | None = None
+    mcp_out_of_range_since_ms: int | None = None
     completed: bool = False
 
 
@@ -29,6 +31,7 @@ class StepUpdate:
     step_valid_since_ms: int | None
     dwell_remaining_ms: int
     completed: bool
+    reset: bool = False
 
 
 def get_session_state(
@@ -52,6 +55,7 @@ def update_step(
     procedure_id: str = "surgical_knot_tying",
     session_key: str | None = None,
     valid_constraints: bool,
+    mcp_in_range: bool | None = None,
     timestamp_ms: int | None = None,
     now_ms: int | None = None,
 ) -> StepUpdate:
@@ -77,8 +81,55 @@ def update_step(
         else (_now_ms() if now_ms is None else now_ms)
     )
 
+    # Global safety constraint: if MCP is out of range continuously for 3 seconds,
+    # reset the entire procedure to the first step (clears any "checkbox" progress).
+    # This applies regardless of current step.
+    if mcp_in_range is False:
+        if state.mcp_out_of_range_since_ms is None:
+            state.mcp_out_of_range_since_ms = int(t_ms)
+        if int(t_ms - state.mcp_out_of_range_since_ms) >= 3000:
+            state.current_step_id = schema.steps[0].id
+            state.step_valid_since_ms = None
+            state.step_invalid_since_ms = None
+            state.mcp_out_of_range_since_ms = None
+            state.completed = False
+            return StepUpdate(
+                step_started=step_started,
+                step_now=state.current_step_id,
+                advanced=False,
+                step_valid_since_ms=state.step_valid_since_ms,
+                dwell_remaining_ms=0,
+                completed=state.completed,
+                reset=True,
+            )
+    elif mcp_in_range is True:
+        state.mcp_out_of_range_since_ms = None
+
     if not valid_constraints:
+        if state.current_step_id == "hold_steady":
+            if state.step_invalid_since_ms is None:
+                state.step_invalid_since_ms = int(t_ms)
+            invalid_elapsed_ms = int(t_ms - state.step_invalid_since_ms)
+            reset_after_ms = int(step_schema.dwell_time_ms)
+            if invalid_elapsed_ms >= reset_after_ms > 0:
+                state.current_step_id = schema.steps[0].id
+                state.step_valid_since_ms = None
+                state.step_invalid_since_ms = None
+                state.mcp_out_of_range_since_ms = None
+                state.completed = False
+                return StepUpdate(
+                    step_started=step_started,
+                    step_now=state.current_step_id,
+                    advanced=False,
+                    step_valid_since_ms=state.step_valid_since_ms,
+                    dwell_remaining_ms=0,
+                    completed=state.completed,
+                    reset=True,
+                )
+
         state.step_valid_since_ms = None
+        state.step_invalid_since_ms = None
+        # Leave MCP timer as-is; it's controlled above by mcp_in_range.
         state.completed = state.current_step_id == "completed"
         return StepUpdate(
             step_started=step_started,
@@ -87,10 +138,12 @@ def update_step(
             step_valid_since_ms=state.step_valid_since_ms,
             dwell_remaining_ms=0,
             completed=state.completed,
+            reset=False,
         )
 
     if state.step_valid_since_ms is None:
         state.step_valid_since_ms = int(t_ms)
+    state.step_invalid_since_ms = None
 
     dwell_ms = int(step_schema.dwell_time_ms)
     if dwell_ms <= 0:
@@ -98,6 +151,7 @@ def update_step(
         nxt = step_schema.next_step
         state.current_step_id = nxt
         state.step_valid_since_ms = None
+        state.step_invalid_since_ms = None
         state.completed = nxt == "completed"
         return StepUpdate(
             step_started=step_started,
@@ -106,6 +160,7 @@ def update_step(
             step_valid_since_ms=state.step_valid_since_ms,
             dwell_remaining_ms=0,
             completed=state.completed,
+            reset=False,
         )
 
     elapsed_ms = int(t_ms - state.step_valid_since_ms)
@@ -119,11 +174,13 @@ def update_step(
             step_valid_since_ms=state.step_valid_since_ms,
             dwell_remaining_ms=int(remaining_ms),
             completed=state.completed,
+            reset=False,
         )
 
     nxt = step_schema.next_step
     state.current_step_id = nxt
     state.step_valid_since_ms = None
+    state.step_invalid_since_ms = None
     state.completed = nxt == "completed"
     return StepUpdate(
         step_started=step_started,
@@ -132,6 +189,7 @@ def update_step(
         step_valid_since_ms=state.step_valid_since_ms,
         dwell_remaining_ms=0,
         completed=state.completed,
+        reset=False,
     )
 
 

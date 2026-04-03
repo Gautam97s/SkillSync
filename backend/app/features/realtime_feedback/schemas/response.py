@@ -7,9 +7,18 @@ class FeedbackItem(BaseModel):
     severity: str = "info"
 
 
+class StepInfo(BaseModel):
+    id: str
+    dwell_time_ms: int
+
+
 class FrameResponse(BaseModel):
     step: str
     valid: bool
     score: float
     feedback: list[FeedbackItem]
     landmarks: list[list[float]] = []
+    angles: dict[str, float] = {}
+    distances: dict[str, float] = {}
+    procedure_steps: list[StepInfo] = []
+    reset: bool = False

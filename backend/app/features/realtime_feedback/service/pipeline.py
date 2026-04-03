@@ -14,10 +14,32 @@ from app.features.procedure_intelligence.engine.state_machine import (
     update_step,
 )
 from app.features.realtime_feedback.schemas.request import FrameRequest
-from app.features.realtime_feedback.schemas.response import FrameResponse
+from app.features.realtime_feedback.schemas.response import FrameResponse, StepInfo
 
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
+_METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
+
+
+def _smooth_metric_map(
+    *,
+    key: str,
+    metric_name: str,
+    values: dict[str, float],
+    alpha: float = 0.3,
+) -> dict[str, float]:
+    session_metrics = _METRIC_HISTORY.setdefault(key, {})
+    previous = session_metrics.get(metric_name)
+    if previous is None or previous.keys() != values.keys():
+        smoothed = {name: float(value) for name, value in values.items()}
+    else:
+        beta = 1.0 - float(alpha)
+        smoothed = {
+            name: (float(alpha) * float(value)) + (beta * float(previous[name]))
+            for name, value in values.items()
+        }
+    session_metrics[metric_name] = smoothed
+    return smoothed
 
 
 def process_frame(request: FrameRequest, *, session_key: str | None = None) -> FrameResponse:
@@ -35,9 +57,13 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         )
 
     normalized = normalize_landmarks(source_landmarks)
-    smoothed = smooth_landmarks(normalized)
+    smoothed = smooth_landmarks(normalized, session_key=session_key)
     angles = compute_angles(smoothed)
     distances = compute_distances(smoothed)
+
+    metric_key = session_key or request.procedure_id
+    angles = _smooth_metric_map(key=metric_key, metric_name="angles", values=angles)
+    distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
     # 1) Determine current step/session context
     schema = load_procedure_schema(request.procedure_id)
@@ -49,9 +75,24 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     # 2) Validate constraints
     validation = validate_step(step=step_schema, angles=angles, distances=distances)
 
+    # Determine MCP in-range against the procedure's MCP constraint (if any).
+    # Prefer the hold_steady range; fallback to current step; fallback to "in range".
+    mcp_constraint = None
+    hold_steady = schema.step_by_id().get("hold_steady")
+    if hold_steady is not None:
+        mcp_constraint = hold_steady.constraints.angles.get("mcp_joint")
+    if mcp_constraint is None:
+        mcp_constraint = step_schema.constraints.angles.get("mcp_joint")
+
+    mcp_in_range: bool | None = None
+    if mcp_constraint is not None:
+        mcp_value = float(angles.get("mcp_joint", 0.0))
+        mcp_in_range = float(mcp_constraint.min) <= mcp_value <= float(mcp_constraint.max)
+
     # 3) Update step state
     step_update = update_step(
         valid_constraints=validation.valid,
+        mcp_in_range=mcp_in_range,
         procedure_id=request.procedure_id,
         session_key=session_key,
         timestamp_ms=request.timestamp_ms,
@@ -65,7 +106,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     feedback = generate_feedback(validation=validation, step_update=step_update)
 
     # 5) Stability scoring (session-based)
-    key = session_key or request.procedure_id
+    key = metric_key
     stability_scorer = _STABILITY_BY_SESSION.get(key)
     if stability_scorer is None:
         stability_scorer = StabilityScorer()
@@ -77,10 +118,19 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
     score = compute_score(valid=validation_now.valid, stability=stability)
 
+    # Convert schema steps to StepInfo objects
+    procedure_steps = [
+        StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
+    ]
+
     return FrameResponse(
         step=step_update.step_now,
         valid=validation_now.valid,
         score=score,
         feedback=feedback,
         landmarks=source_landmarks,
+        angles=angles,
+        distances=distances,
+        procedure_steps=procedure_steps,
+        reset=bool(step_update.reset),
     )

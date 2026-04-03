@@ -68,6 +68,15 @@ def generate_feedback(
 
     Returns list[FeedbackItem] for response compatibility.
     """
+    if not validation.valid and step_update.step_started == "grip_init":
+        return [
+            FeedbackItem(
+                code="GRIP_NOT_DETECTED",
+                message="No grip detected yet. Hold the pen between thumb and index finger before moving on.",
+                severity="warning",
+            )
+        ]
+
     if not validation.valid:
         return _violation_feedback_items(violations=list(validation.violations or []))
 

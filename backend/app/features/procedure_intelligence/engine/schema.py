@@ -42,19 +42,19 @@ PROCEDURES: dict[str, dict[str, Any]] = {
             {
                 "id": "grip_init",
                 "constraints": {
-                    "angles": {"thumb_index_angle": {"min": 20.0, "max": 45.0}},
-                    "distances": {"thumb_index_distance": {"max": 0.15}},
+                    "angles": {"mcp_joint": {"min": 20.0, "max": 45.0}},
+                    "distances": {"thumb_index_distance": {"max": 0.08}},
                 },
-                "dwell_time_ms": 500,
+                "dwell_time_ms": 700,
                 "next_step": "hold_steady",
             },
             {
                 "id": "hold_steady",
                 "constraints": {
-                    "angles": {"thumb_index_angle": {"min": 20.0, "max": 70.0}},
+                    "angles": {"mcp_joint": {"min": 20.0, "max": 45.0}},
                     "distances": {"thumb_index_distance": {"max": 0.2}},
                 },
-                "dwell_time_ms": 500,
+                "dwell_time_ms": 3000,
                 "next_step": "completed",
             },
             {
