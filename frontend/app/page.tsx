@@ -85,6 +85,18 @@ export default function HomePage() {
   const scorePercent = Math.max(0, Math.min(100, Math.round((latest?.score ?? 0.942) * 100)));
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
+  const mcp = latest?.angles?.mcp_joint;
+  const MCP_MIN = 20;
+  const MCP_MAX = 45;
+  const overlayVariant: "good" | "warn" | "bad" =
+    typeof mcp !== "number"
+      ? "warn"
+      : mcp >= MCP_MIN && mcp <= MCP_MAX
+        ? "good"
+        : mcp > MCP_MAX && mcp <= 60
+          ? "warn"
+          : "bad";
+
   const stepDescriptions: Record<string, string> = {
     grip_init: "Establish initial grip with proper finger positioning.",
     hold_steady: "Maintain the grip between 30 and 45 degrees for 3 seconds.",
@@ -157,7 +169,7 @@ export default function HomePage() {
           <div className="hand-stage" aria-label="Live hand stage">
             <div className="stage-glow" />
             <CameraFeed compact />
-            <HandOverlay />
+            <HandOverlay variant={overlayVariant} />
             {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
 
             <div className="status-card status-card--stage">
