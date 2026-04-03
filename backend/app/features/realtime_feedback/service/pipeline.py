@@ -81,39 +81,42 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     landmarks_estimated = False
 
     if not source_landmarks:
-        estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
-        if estimate.expired or not estimate.landmarks:
-            reset_session(procedure_id=request.procedure_id, session_key=session_key)
+# --- Estimation + fallback handling ---
+estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
 
-            # Important: even when no hand is detected, still return the procedure steps
-            # so the frontend can render a consistent checklist (STEP 1 OF N).
-            schema = load_procedure_schema(request.procedure_id)
-            procedure_steps = [
-                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
-            ]
-            return FrameResponse(
-                step=schema.steps[0].id,
-                valid=False,
-                score=0.0,
-                feedback=[],
-                landmarks=[],
-                joint_confidence=dict(estimate.joint_confidence),
-                landmarks_estimated=bool(estimate.estimated),
-                angles=dict(_ZERO_ANGLES),
-                distances=dict(_ZERO_DISTANCES),
-                procedure_steps=procedure_steps,
-                reset=True,
-            )
+if estimate.expired or not estimate.landmarks:
+    reset_session(procedure_id=request.procedure_id, session_key=session_key)
 
-        source_landmarks = estimate.landmarks
-        joint_confidence = dict(estimate.joint_confidence)
-        landmarks_estimated = bool(estimate.estimated)
-    else:
-        estimate = estimator.observe(source_landmarks, timestamp_ms=request.timestamp_ms)
-        source_landmarks = estimate.landmarks
-        joint_confidence = dict(estimate.joint_confidence)
-        landmarks_estimated = bool(estimate.estimated)
+    # Keep difficulty support (samarth) + estimator metadata (dev)
+    schema = load_procedure_schema(
+        request.procedure_id,
+        difficulty=getattr(request, "difficulty", None),
+    )
 
+    procedure_steps = [
+        StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms)
+        for step in schema.steps
+    ]
+
+    return FrameResponse(
+        step=schema.steps[0].id,
+        valid=False,
+        score=0.0,
+        feedback=[],
+        landmarks=[],
+        joint_confidence=dict(estimate.joint_confidence),
+        landmarks_estimated=bool(estimate.estimated),
+        angles=dict(_ZERO_ANGLES),
+        distances=dict(_ZERO_DISTANCES),
+        procedure_steps=procedure_steps,
+        reset=True,
+        difficulty=getattr(request, "difficulty", None),
+    )
+
+# --- Normal flow ---
+source_landmarks = estimate.landmarks
+joint_confidence = dict(estimate.joint_confidence)
+landmarks_estimated = bool(estimate.estimated)
     normalized = normalize_landmarks(source_landmarks)
     smoothed = smooth_landmarks(normalized, session_key=session_key)
     angles = compute_angles(smoothed)
@@ -123,7 +126,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
     # 1) Determine current step/session context
-    schema = load_procedure_schema(request.procedure_id)
+    schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
     current_step_id = get_current_step_id(
         procedure_id=request.procedure_id, session_key=session_key
     )
@@ -223,5 +226,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
-        fatigue=fatigue_info,
+difficulty=request.difficulty,
+fatigue=fatigue_info,
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -118,6 +119,7 @@ PROCEDURES: dict[str, dict[str, Any]] = {
                 "constraints": {
                     "angles": {"wrist_index_angle": {"min": 70.0, "max": 110.0}},
                 },
+                # NOTE: intermediate values used as base; beginner overrides applied at load time.
                 "dwell_time_ms": 2000,
                 "next_step": "cutting_angle_control",
             },
@@ -131,7 +133,7 @@ PROCEDURES: dict[str, dict[str, Any]] = {
                     "incorrect": "Adjust your wrist slightly to find a steady angle.",
                 },
                 "constraints": {
-                    "angles": {"wrist_index_angle": {"min": 20.0, "max": 70.0}},
+                    "angles": {"wrist_index_angle": {"min": 30.0, "max": 45.0}},
                 },
                 "dwell_time_ms": 2000,
                 "next_step": "grip_stability",
@@ -146,7 +148,7 @@ PROCEDURES: dict[str, dict[str, Any]] = {
                     "incorrect": "Stay still and hold this position a little longer.",
                 },
                 "constraints": {
-                    "angles": {"wrist_index_angle": {"min": 20.0, "max": 70.0}},
+                    "angles": {"wrist_index_angle": {"min": 30.0, "max": 45.0}},
                     "distances": {
                         "thumb_index_over_palm": {"min": 0.0, "max": 0.35},
                         "index_middle_over_palm": {"max": 0.6},
@@ -169,6 +171,51 @@ PROCEDURES: dict[str, dict[str, Any]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Difficulty overrides
+# ---------------------------------------------------------------------------
+# Keys: step id -> constraint category -> constraint key -> replacement values.
+# The base PROCEDURES dict above holds the "intermediate" (strict) values.
+# Beginner gets wider tolerances applied at load time.
+
+DIFFICULTY_OVERRIDES: dict[str, dict[str, dict[str, dict[str, dict[str, float]]]]] = {
+    "beginner": {
+        "initial_incision_position": {
+            "angles": {"wrist_index_angle": {"min": 60.0, "max": 120.0}},
+        },
+        "cutting_angle_control": {
+            "angles": {"wrist_index_angle": {"min": 30.0, "max": 60.0}},
+        },
+        "grip_stability": {
+            "angles": {"wrist_index_angle": {"min": 30.0, "max": 60.0}},
+        },
+    },
+    # "intermediate" uses the base values from PROCEDURES (no overrides needed).
+}
+
+
+def _apply_difficulty_overrides(
+    raw: dict[str, Any],
+    difficulty: str,
+) -> dict[str, Any]:
+    """Return a deep-copied procedure dict with difficulty overrides merged in."""
+    overrides = DIFFICULTY_OVERRIDES.get(difficulty)
+    if not overrides:
+        return raw  # intermediate – no changes needed
+
+    patched = copy.deepcopy(raw)
+    for step in patched.get("steps", []):
+        step_overrides = overrides.get(step["id"])
+        if not step_overrides:
+            continue
+        constraints = step.setdefault("constraints", {})
+        for category, entries in step_overrides.items():
+            cat_dict = constraints.setdefault(category, {})
+            for key, values in entries.items():
+                cat_dict[key] = {**cat_dict.get(key, {}), **values}
+    return patched
+
+
 LoadSchemaErrorCode = Literal["unknown_procedure_id"]
 
 
@@ -178,12 +225,16 @@ class LoadSchemaError(ValueError):
         self.code = code
 
 
-def load_procedure_schema(procedure_id: str) -> ProcedureSchema:
+def load_procedure_schema(
+    procedure_id: str,
+    difficulty: str = "beginner",
+) -> ProcedureSchema:
     raw = PROCEDURES.get(procedure_id)
     if raw is None:
         raise LoadSchemaError(
             "unknown_procedure_id",
             f"Unknown procedure_id={procedure_id!r}. Available={sorted(PROCEDURES.keys())}",
         )
-    return ProcedureSchema.model_validate(raw)
+    patched = _apply_difficulty_overrides(raw, difficulty)
+    return ProcedureSchema.model_validate(patched)
 

@@ -32,3 +32,4 @@ class FrameResponse(BaseModel):
     distances: dict[str, float] = {}
     procedure_steps: list[StepInfo] = []
     reset: bool = False
+    difficulty: str = "beginner"

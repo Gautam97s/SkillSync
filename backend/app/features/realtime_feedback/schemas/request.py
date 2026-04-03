@@ -6,3 +6,4 @@ class FrameRequest(BaseModel):
     timestamp_ms: int = Field(..., ge=0)
     landmarks: list[list[float]]
     procedure_id: str
+    difficulty: str = Field("beginner", description="beginner or intermediate")
