@@ -185,6 +185,27 @@ body {
   background: transparent;
 }
 
+.guidance-protractor-3d {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
+.stage-protractor-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* This HUD is UI, not camera-space; don't mirror it. */
+  transform: rotateX(8deg);
+  transform-origin: 90% 12%;
+  background: transparent;
+}
+
 .stage-empty {
   position: absolute;
   left: 50%;

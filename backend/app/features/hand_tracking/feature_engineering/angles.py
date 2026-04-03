@@ -22,6 +22,8 @@ def compute_angles(landmarks: list[list[float]]) -> dict[str, float]:
             "wrist_finger_angle": 0.0,
             "mcp_joint": 0.0,
             "pip_joint": 0.0,
+            "wrist_index_angle": 0.0,
+            "index_middle_alignment": 0.0,
         }
         
     # Thumb tip (4) to Wrist (0) to Index tip (8) angle
@@ -36,9 +38,17 @@ def compute_angles(landmarks: list[list[float]]) -> dict[str, float]:
     # Index PIP joint: angle at landmark 6 between MCP (5) and DIP (7)
     pip_joint = calculate_angle_3d(landmarks[5], landmarks[6], landmarks[7])
 
+    # Wrist-index MCP-index tip angle (used for scalpel orientation guidance)
+    wrist_index_angle = calculate_angle_3d(landmarks[0], landmarks[5], landmarks[8])
+
+    # Alignment support angle at index tip: index MCP -> index tip -> middle tip
+    index_middle_alignment = calculate_angle_3d(landmarks[5], landmarks[8], landmarks[12])
+
     return {
         "thumb_index_angle": thumb_index_angle,
         "wrist_finger_angle": wrist_finger_angle,
         "mcp_joint": mcp_joint,
         "pip_joint": pip_joint,
+        "wrist_index_angle": wrist_index_angle,
+        "index_middle_alignment": index_middle_alignment,
     }

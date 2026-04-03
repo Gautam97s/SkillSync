@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
+// import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
 
 type LandmarksDetail = {
@@ -170,6 +171,7 @@ export default function HomePage() {
             <div className="stage-glow" />
             <CameraFeed compact />
             <HandOverlay variant={overlayVariant} />
+            {/* <ProtractorGuidance targetAngleDeg={90} toleranceDeg={12} softBandDeg={20} /> */}
             {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
 
             <div className="status-card status-card--stage">
