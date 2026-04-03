@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 // import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
+import type { DecayPrediction } from "../shared/lib/types";
 
 type LandmarksDetail = {
   landmarks?: number[][];
@@ -116,6 +117,37 @@ export default function HomePage() {
   const landmarksRef = useRef<number[][]>([]);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const difficultyRef = useRef<Difficulty>("beginner");
+  const [studentId, setStudentId] = useState("");
+  const studentIdRef = useRef("");
+  const [studentConfirmed, setStudentConfirmed] = useState(false);
+  const [decay, setDecay] = useState<DecayPrediction | null>(null);
+
+  const fetchDecay = useCallback(async (sid: string) => {
+    if (!sid) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/students/${encodeURIComponent(sid)}/decay`);
+      if (res.ok) {
+        const data: DecayPrediction = await res.json();
+        setDecay(data);
+      }
+    } catch { /* backend may not be available yet */ }
+  }, []);
+
+  const confirmStudent = useCallback(async () => {
+    const sid = studentId.trim().toLowerCase();
+    if (!sid) return;
+    studentIdRef.current = sid;
+    setStudentConfirmed(true);
+    // Create student in DB
+    try {
+      await fetch("http://localhost:8000/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: sid }),
+      });
+    } catch { /* ignore */ }
+    fetchDecay(sid);
+  }, [studentId, fetchDecay]);
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -149,6 +181,7 @@ export default function HomePage() {
         landmarks: landmarksRef.current,
         procedure_id: "surgical_knot_tying",
         difficulty: difficultyRef.current,
+        student_id: studentIdRef.current || "anonymous",
       });
       frameCounter.current += 1;
     };
@@ -291,6 +324,13 @@ export default function HomePage() {
   const scorePercent = displayScorePercent;
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
+  // Fetch decay prediction when a session is saved
+  useEffect(() => {
+    if (latest?.session_saved && studentIdRef.current) {
+      fetchDecay(studentIdRef.current);
+    }
+  }, [latest?.session_saved, fetchDecay]);
+
   const stepDescriptions: Record<string, string> = {
     thumb_index_precision_grip: "Keep thumb and index finger close for precision grip.",
     middle_finger_support: "Use middle finger as supporting finger near index.",
@@ -318,7 +358,7 @@ export default function HomePage() {
 
     let state: "pending" | "active" | "done" = "pending";
     if (effectiveStepId === step.id) {
-      state = "active";
+      state = step.id === "completed" ? "done" : "active";
     } else if (index < currentStepIndex) {
       state = "done";
     }
@@ -358,9 +398,29 @@ export default function HomePage() {
           <button className="icon-btn" aria-label="Settings">
             S
           </button>
-          <div className="avatar">GH</div>
+          <div className="avatar">{studentConfirmed ? studentId.slice(0, 2).toUpperCase() : "GH"}</div>
         </div>
       </header>
+
+      {!studentConfirmed && (
+        <div className="student-bar">
+          <div className="student-bar-inner">
+            <span className="student-bar-icon">👤</span>
+            <input
+              id="student-name-input"
+              className="student-input"
+              type="text"
+              placeholder="Enter your name to start tracking..."
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmStudent(); }}
+            />
+            <button className="student-btn" onClick={confirmStudent} disabled={!studentId.trim()}>
+              Start Session
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="content-grid">
         <section className="viewer-panel">
@@ -460,6 +520,49 @@ export default function HomePage() {
               ))}
             </ul>
           </article>
+
+          {decay && decay.total_sessions > 0 && (
+            <article className="decay-card">
+              <div className="decay-head">
+                <h2>Skill Retention</h2>
+                {decay.refresher_needed && (
+                  <span className="refresher-badge">⚠️ REFRESHER NEEDED</span>
+                )}
+              </div>
+              <div className="decay-grid">
+                <div className="decay-stat">
+                  <span className="decay-stat-value">{Math.round(decay.current_competency * 100)}%</span>
+                  <span className="decay-stat-label">Current Competency</span>
+                </div>
+                <div className="decay-stat">
+                  <span className="decay-stat-value">{decay.total_sessions}</span>
+                  <span className="decay-stat-label">Total Sessions</span>
+                </div>
+              </div>
+              <div className="decay-details">
+                {decay.days_until_decay !== null && (
+                  <div className="decay-row">
+                    <span>📉 Projected Decay</span>
+                    <strong>{decay.days_until_decay > 0 ? `${Math.ceil(decay.days_until_decay)} days` : "Now"}</strong>
+                  </div>
+                )}
+                {decay.refresher_date && (
+                  <div className="decay-row">
+                    <span>📅 Refresher Date</span>
+                    <strong>{new Date(decay.refresher_date).toLocaleDateString()}</strong>
+                  </div>
+                )}
+                <div className="decay-row">
+                  <span>📊 Decay Rate (λ)</span>
+                  <strong>{(decay.decay_rate * 100).toFixed(1)}%/day</strong>
+                </div>
+              </div>
+              <div className="decay-bar-track">
+                <div className="decay-bar-fill" style={{ width: `${Math.round(decay.current_competency * 100)}%` }} />
+                <div className="decay-threshold" />
+              </div>
+            </article>
+          )}
         </aside>
       </section>
     </main>

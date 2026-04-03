@@ -23,3 +23,4 @@ class FrameResponse(BaseModel):
     procedure_steps: list[StepInfo] = []
     reset: bool = False
     difficulty: str = "beginner"
+    session_saved: bool = False
