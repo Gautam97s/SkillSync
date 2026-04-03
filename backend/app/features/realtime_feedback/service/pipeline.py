@@ -13,6 +13,7 @@ from app.features.procedure_intelligence.engine.stability import StabilityScorer
 from app.features.procedure_intelligence.engine.state_machine import (
     get_current_step_id,
     next_step,
+    reset_session,
     update_step,
 )
 from app.features.realtime_feedback.schemas.request import FrameRequest
@@ -24,6 +25,24 @@ _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
 
 _FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
 
+_ZERO_ANGLES: dict[str, float] = {
+    "thumb_index_angle": 0.0,
+    "wrist_finger_angle": 0.0,
+    "mcp_joint": 0.0,
+    "pip_joint": 0.0,
+    "wrist_index_angle": 0.0,
+    "index_middle_alignment": 0.0,
+}
+
+_ZERO_DISTANCES: dict[str, float] = {
+    "thumb_index_distance": 0.0,
+    "index_middle_distance": 0.0,
+    "palm_width": 0.0,
+    "thumb_index_over_palm": 0.0,
+    "index_middle_over_palm": 0.0,
+    "middle_below_index": 0.0,
+}
+  
 def _smooth_metric_map(
     *,
     key: str,
@@ -51,6 +70,8 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     source_landmarks = request.landmarks if request.landmarks else camera_runtime.latest_landmarks()
 
     if not source_landmarks:
+        reset_session(procedure_id=request.procedure_id, session_key=session_key)
+
         # Important: even when no hand is detected, still return the procedure steps
         # so the frontend can render a consistent checklist (STEP 1 OF N).
         schema = load_procedure_schema(request.procedure_id)
@@ -63,8 +84,10 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
             score=0.0,
             feedback=[],
             landmarks=[],
+            angles=dict(_ZERO_ANGLES),
+            distances=dict(_ZERO_DISTANCES),
             procedure_steps=procedure_steps,
-            reset=False,
+            reset=True,
         )
 
     normalized = normalize_landmarks(source_landmarks)
