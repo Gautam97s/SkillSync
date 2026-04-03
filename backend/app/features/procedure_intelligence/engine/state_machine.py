@@ -106,27 +106,6 @@ def update_step(
         state.mcp_out_of_range_since_ms = None
 
     if not valid_constraints:
-        if state.current_step_id == "hold_steady":
-            if state.step_invalid_since_ms is None:
-                state.step_invalid_since_ms = int(t_ms)
-            invalid_elapsed_ms = int(t_ms - state.step_invalid_since_ms)
-            reset_after_ms = int(step_schema.dwell_time_ms)
-            if invalid_elapsed_ms >= reset_after_ms > 0:
-                state.current_step_id = schema.steps[0].id
-                state.step_valid_since_ms = None
-                state.step_invalid_since_ms = None
-                state.mcp_out_of_range_since_ms = None
-                state.completed = False
-                return StepUpdate(
-                    step_started=step_started,
-                    step_now=state.current_step_id,
-                    advanced=False,
-                    step_valid_since_ms=state.step_valid_since_ms,
-                    dwell_remaining_ms=0,
-                    completed=state.completed,
-                    reset=True,
-                )
-
         state.step_valid_since_ms = None
         state.step_invalid_since_ms = None
         # Leave MCP timer as-is; it's controlled above by mcp_in_range.

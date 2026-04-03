@@ -81,7 +81,12 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     step_schema = schema.step_by_id()[current_step_id]
 
     # 2) Validate constraints
-    validation = validate_step(step=step_schema, angles=angles, distances=distances)
+    validation = validate_step(
+        step=step_schema,
+        angles=angles,
+        distances=distances,
+        scalars=distances,
+    )
 
     # Determine MCP in-range against the procedure's MCP constraint (if any).
     # Prefer the hold_steady range; fallback to current step; fallback to "in range".
@@ -108,7 +113,12 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
     # 3b) Keep consistency
     step_now_schema = schema.step_by_id()[step_update.step_now]
-    validation_now = validate_step(step=step_now_schema, angles=angles, distances=distances)
+    validation_now = validate_step(
+        step=step_now_schema,
+        angles=angles,
+        distances=distances,
+        scalars=distances,
+    )
 
     # 4) Feedback
     feedback = generate_feedback(validation=validation, step_update=step_update)
