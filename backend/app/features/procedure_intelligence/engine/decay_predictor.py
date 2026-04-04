@@ -32,7 +32,7 @@ class DecaySummary(BaseModel):
     decay_rate: float = 0.0
     current_competency: float = 0.0
     projected_decay_date: str | None = None
-    days_until_decay: float | None = None
+    days_until_decay: int | None = None
     refresher_date: str | None = None
     refresher_needed: bool = False
 
@@ -124,7 +124,7 @@ def predict_decay(student_id: str) -> dict[str, Any]:
         "decay_rate": float,
         "current_competency": float,
         "projected_decay_date": str | None,
-        "days_until_decay": float | None,
+        "days_until_decay": int | None,
         "refresher_date": str | None,
         "refresher_needed": bool,
     }
@@ -202,6 +202,8 @@ def predict_decay(student_id: str) -> dict[str, Any]:
             days_until_decay = (decay_dt - now.replace(tzinfo=None)).total_seconds() / 86400.0
         else:
             days_until_decay = (decay_dt - now).total_seconds() / 86400.0
+
+        days_until_decay = max(0, int(math.ceil(days_until_decay)))
 
     refresher_needed = (
         days_until_decay is not None and days_until_decay <= REFRESHER_BUFFER_DAYS

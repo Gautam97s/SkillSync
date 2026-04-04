@@ -115,16 +115,12 @@ function formatDaysUntilDecay(days: number | null | undefined): string {
     return "Pending";
   }
 
-  const normalized = Math.max(0, Math.round(days * 10) / 10);
+  const normalized = Math.max(0, Math.trunc(days));
   if (normalized === 0) {
     return "Due now";
   }
 
-  if (Number.isInteger(normalized)) {
-    return `${normalized} day${normalized === 1 ? "" : "s"}`;
-  }
-
-  return `${normalized.toFixed(1)} days`;
+  return `${normalized} day${normalized === 1 ? "" : "s"}`;
 }
 
 export default function HomePage() {
