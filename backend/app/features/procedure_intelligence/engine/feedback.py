@@ -13,67 +13,6 @@ _PLAIN_FEEDBACK_BY_CONSTRAINT: dict[str, str] = {
 }
 
 
-def _format_target(expected: dict) -> str:
-    min_v = expected.get("min")
-    max_v = expected.get("max")
-    if min_v is not None and max_v is not None:
-        return f"{float(min_v):.2f}-{float(max_v):.2f}"
-    if max_v is not None:
-        return f"<= {float(max_v):.2f}"
-    if min_v is not None:
-        return f">= {float(min_v):.2f}"
-    return "target range"
-
-
-def _violation_side(*, expected: dict, actual: float) -> str:
-    min_v = expected.get("min")
-    max_v = expected.get("max")
-    if min_v is not None and actual < float(min_v):
-        return "low"
-    if max_v is not None and actual > float(max_v):
-        return "high"
-    return "unknown"
-
-
-def _directional_message(*, key: str, side: str) -> str:
-    if key == "thumb_index_over_palm":
-        return (
-            "Bring your thumb and index finger closer together."
-            if side == "high"
-            else "Relax the pinch slightly so the fingers are not too tight."
-        )
-    if key == "index_middle_over_palm":
-        return (
-            "Move your middle finger closer to your index finger."
-            if side == "high"
-            else "Let your middle finger separate slightly from your index finger."
-        )
-    if key == "index_middle_alignment":
-        return (
-            "Straighten and align your index and middle finger a little more."
-            if side == "high"
-            else "Reduce the overlap and align both fingers naturally."
-        )
-    if key == "middle_below_index":
-        return (
-            "Lift your middle finger slightly upward toward the index finger."
-            if side == "high"
-            else "Lower your middle finger a little below the index finger."
-        )
-    if key == "wrist_index_angle":
-        return (
-            "Open your wrist angle a bit more."
-            if side == "low"
-            else "Close your wrist angle slightly."
-        )
-
-    return (
-        "Increase this value slightly to reach the target."
-        if side == "low"
-        else "Decrease this value slightly to reach the target."
-    )
-
-
 def _violation_feedback_items(*, violations: list[dict]) -> list[FeedbackItem]:
     if not violations:
         return [
@@ -86,21 +25,9 @@ def _violation_feedback_items(*, violations: list[dict]) -> list[FeedbackItem]:
 
     primary = violations[0]
     key = str(primary.get("constraint_key") or "constraint")
-    expected = dict(primary.get("expected") or {})
-    actual = float(primary.get("actual") or 0.0)
-    side = _violation_side(expected=expected, actual=actual)
-
-    action = _directional_message(key=key, side=side)
-    fallback = _PLAIN_FEEDBACK_BY_CONSTRAINT.get(
+    plain_message = _PLAIN_FEEDBACK_BY_CONSTRAINT.get(
         key,
         "Adjust your grip and try to match the target position.",
-    )
-    target_text = _format_target(expected)
-
-    plain_message = (
-        f"{action} (Current: {actual:.2f}, target: {target_text})."
-        if expected
-        else fallback
     )
 
     return [

@@ -14,16 +14,33 @@ Where:
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.core.database import get_db
+
+
+class DecaySummary(BaseModel):
+    """Serialized decay prediction (REST + WebSocket)."""
+
+    student_id: str
+    total_sessions: int
+    last_session_date: str | None = None
+    last_score: float = 0.0
+    decay_rate: float = 0.0
+    current_competency: float = 0.0
+    projected_decay_date: str | None = None
+    days_until_decay: float | None = None
+    refresher_date: str | None = None
+    refresher_needed: bool = False
 
 
 # -- constants -----------------------------------------------------------
 
 COMPETENCY_THRESHOLD = 0.70   # below this → refresher needed
-REFRESHER_BUFFER_DAYS = 2     # schedule refresher this many days before decay
+REFRESHER_BUFFER_DAYS = 1     # schedule refresher one day before projected decay
 BASE_DECAY_RATE = 0.10        # default λ per day
 MIN_DECAY_RATE = 0.02         # floor: even worst students don't forget instantly
 MAX_DECAY_RATE = 0.30         # ceiling
@@ -146,6 +163,8 @@ def predict_decay(student_id: str) -> dict[str, Any]:
     # Parse last session date
     try:
         last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00"))
+        if last_date.tzinfo is None:
+            last_date = last_date.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         last_date = datetime.now(timezone.utc)
 
@@ -171,7 +190,6 @@ def predict_decay(student_id: str) -> dict[str, Any]:
     days_until_decay = None
 
     if total_days is not None:
-        from datetime import timedelta
         decay_dt = last_date + timedelta(days=total_days)
         projected_decay_date = decay_dt.isoformat()
 

@@ -2,6 +2,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.features.procedure_intelligence.engine.decay_predictor import DecaySummary
+
 
 class FeedbackItem(BaseModel):
     code: str
@@ -35,3 +37,4 @@ class FrameResponse(BaseModel):
     difficulty: str = "beginner"
     session_saved: bool = False
     fatigue: Optional[FatigueInfo] = None
+    skill_decay: Optional[DecaySummary] = None

@@ -1,11 +1,16 @@
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional, TYPE_CHECKING
 
-import cv2
-
-from app.features.hand_tracking.cv.hand_tracker import HandTracker
 from app.shared.utils.logger import get_logger
+
+try:
+    import cv2
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    cv2 = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from app.features.hand_tracking.cv.hand_tracker import HandTracker
 
 logger = get_logger(__name__)
 
@@ -14,8 +19,8 @@ class CameraRuntime:
     def __init__(self, *, fps: int = 30, device_index: int = 0) -> None:
         self._fps = max(fps, 1)
         self._device_index = device_index
-        self._tracker: Optional[HandTracker] = None
-        self._capture: Optional[cv2.VideoCapture] = None
+        self._tracker: Optional["HandTracker"] = None
+        self._capture: Optional[Any] = None
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -27,8 +32,14 @@ class CameraRuntime:
         if self._running:
             return True
 
+        if cv2 is None:
+            logger.error("OpenCV (cv2) is not installed; camera runtime cannot start")
+            return False
+
         try:
             if self._tracker is None:
+                from app.features.hand_tracking.cv.hand_tracker import HandTracker
+
                 self._tracker = HandTracker()
         except Exception as exc:
             logger.exception("Failed to initialize hand tracker: %s", exc)

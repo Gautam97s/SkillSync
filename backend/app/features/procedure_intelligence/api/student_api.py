@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.features.procedure_intelligence.engine.decay_predictor import predict_decay
+from app.features.procedure_intelligence.engine.decay_predictor import DecaySummary, predict_decay
 
 
 router = APIRouter(prefix="/api", tags=["students"])
@@ -34,19 +34,6 @@ class SessionResponse(BaseModel):
     avg_hesitation_ms: float
     tremor_score: float
     passed: bool
-
-
-class DecayResponse(BaseModel):
-    student_id: str
-    total_sessions: int
-    last_session_date: str | None
-    last_score: float
-    decay_rate: float
-    current_competency: float
-    projected_decay_date: str | None
-    days_until_decay: float | None
-    refresher_date: str | None
-    refresher_needed: bool
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────
@@ -83,6 +70,6 @@ def get_sessions(student_id: str) -> list[dict]:
     return sessions
 
 
-@router.get("/students/{student_id}/decay", response_model=DecayResponse)
-def get_decay_prediction(student_id: str) -> dict:
-    return predict_decay(student_id.strip().lower())
+@router.get("/students/{student_id}/decay", response_model=DecaySummary)
+def get_decay_prediction(student_id: str) -> DecaySummary:
+    return DecaySummary(**predict_decay(student_id.strip().lower()))
