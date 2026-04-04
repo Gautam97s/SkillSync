@@ -115,23 +115,32 @@ function formatDaysUntilDecay(days: number | null | undefined): string {
     return "Pending";
   }
 
-  const normalized = Math.max(0, Math.round(days * 10) / 10);
+  const normalized = Math.max(0, Math.trunc(days));
   if (normalized === 0) {
     return "Due now";
   }
 
-  if (Number.isInteger(normalized)) {
-    return `${normalized} day${normalized === 1 ? "" : "s"}`;
+  return `${normalized} day${normalized === 1 ? "" : "s"}`;
+}
+
+function formatSessionDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s duration`;
   }
 
-  return `${normalized.toFixed(1)} days`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s duration`;
 }
 
 export default function HomePage() {
   const { connected, reconnecting, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
   const landmarksRef = useRef<number[][]>([]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isStageFullscreen, setIsStageFullscreen] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const difficultyRef = useRef<Difficulty>("beginner");
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
@@ -183,6 +192,46 @@ export default function HomePage() {
     } catch {}
     loadUserDbData(sid);
   }, [studentId, loadUserDbData]);
+
+  const toggleStageFullscreen = useCallback(async () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+    const stageWithWebkit = stage as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+    const activeFullscreenElement = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+
+    try {
+      if (activeFullscreenElement === stage) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        }
+      } else if (stage.requestFullscreen) {
+        await stage.requestFullscreen();
+      } else if (stageWithWebkit.webkitRequestFullscreen) {
+        await stageWithWebkit.webkitRequestFullscreen();
+      }
+    } catch {
+      // Some mobile browsers can reject fullscreen requests unexpectedly.
+    }
+  }, []);
+
+  useEffect(() => {
+    const doc = document as Document & { webkitFullscreenElement?: Element | null };
+    const syncFullscreenState = () => {
+      const activeFullscreenElement = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      setIsStageFullscreen(activeFullscreenElement === stageRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -462,7 +511,15 @@ export default function HomePage() {
                 <button id="difficulty-intermediate" className={`diff-pill ${difficulty === "intermediate" ? "diff-pill--active" : ""}`} onClick={() => { setDifficulty("intermediate"); difficultyRef.current = "intermediate"; }} aria-pressed={difficulty === "intermediate"}>Intermediate</button>
               </div>
             </div>
-            <div className="hand-stage" aria-label="Live hand stage">
+            <div ref={stageRef} className="hand-stage" aria-label="Live hand stage">
+              <button
+                type="button"
+                className="mobile-fullscreen-btn"
+                onClick={() => { void toggleStageFullscreen(); }}
+                aria-label={isStageFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isStageFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              </button>
               <div className="stage-glow" />
               <CameraFeed compact />
               <HandOverlay variant={overlayVariant} />
@@ -626,7 +683,7 @@ export default function HomePage() {
                               <div><strong>{formatRetentionDate(session.completed_at)}</strong><p>{formatProcedureLabel(session.procedure_id)} · {session.difficulty}</p></div>
                               <div className="timeline-score">{Math.round(session.final_score * 100)}%</div>
                             </div>
-                            <div className="timeline-meta"><span>{session.passed === false ? "Needs review" : "Passed"}</span><span>{session.attempt_count} attempts</span><span>{Math.round(session.duration_ms / 1000)}s duration</span></div>
+                            <div className="timeline-meta"><span>{session.passed === false ? "Needs review" : "Passed"}</span><span>{session.attempt_count} attempts</span><span>{formatSessionDuration(session.duration_ms)}</span></div>
                           </div>
                         </li>
                       ))}

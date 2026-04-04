@@ -18,7 +18,7 @@ from app.features.procedure_intelligence.engine.state_machine import (
     update_step,
 )
 from app.features.realtime_feedback.schemas.request import FrameRequest
-from app.features.realtime_feedback.schemas.response import FatigueInfo, FrameResponse, StepInfo
+from app.features.realtime_feedback.schemas.response import FrameResponse, StepInfo
 
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
@@ -232,14 +232,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         had_error=not validation_now.valid,
     )
 
-    fatigue_info = FatigueInfo(
-        fatigue_level=fatigue_assessment.fatigue_level.value,
-        fatigue_score=fatigue_assessment.fatigue_score,
-        recommended_break_seconds=fatigue_assessment.recommended_break_seconds,
-        session_minutes=round(fatigue_detector.session_minutes, 1),
-        warning_message=fatigue_assessment.warning_message,
-    )
-
     return FrameResponse(
         step=step_update.step_now,
         valid=validation_now.valid,
@@ -254,6 +246,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         reset=bool(step_update.reset),
         difficulty=request.difficulty,
         session_saved=session_saved,
-        fatigue=fatigue_info,
+        fatigue=fatigue_assessment,
         skill_decay=skill_decay,
     )

@@ -58,4 +58,6 @@ export type FrameResponse = {
     warning_message?: string | null;
   };
   skill_decay?: DecayPrediction;
+    performance_degradation_pct?: number;
+    time_since_last_break_minutes?: number;
 };

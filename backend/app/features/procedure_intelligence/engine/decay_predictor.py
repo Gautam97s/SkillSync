@@ -39,8 +39,10 @@ class DecaySummary(BaseModel):
 
 # -- constants -----------------------------------------------------------
 
-COMPETENCY_THRESHOLD = 0.70   # below this → refresher needed
-REFRESHER_BUFFER_DAYS = 1     # schedule refresher one day before projected decay
+PROJECTED_DECAY_THRESHOLD = 0.45
+CRITICAL_COMPETENCY_THRESHOLD = 0.35
+REFRESHER_BUFFER_DAYS = 1
+POST_SESSION_GRACE_DAYS = 1
 BASE_DECAY_RATE = 0.10        # default λ per day
 MIN_DECAY_RATE = 0.02         # floor: even worst students don't forget instantly
 MAX_DECAY_RATE = 0.30         # ceiling
@@ -99,7 +101,11 @@ def _compute_competency(s0: float, lam: float, days: float) -> float:
     return s0 * math.exp(-lam * max(0.0, days))
 
 
-def _days_until_threshold(s0: float, lam: float, threshold: float = COMPETENCY_THRESHOLD) -> float | None:
+def _days_until_threshold(
+    s0: float,
+    lam: float,
+    threshold: float,
+) -> float | None:
     """Solve for t where competency(t) = threshold → t = -ln(threshold/S₀)/λ"""
     if s0 <= 0 or lam <= 0:
         return None
@@ -109,6 +115,15 @@ def _days_until_threshold(s0: float, lam: float, threshold: float = COMPETENCY_T
     if ratio <= 0:
         return None
     return -math.log(ratio) / lam
+
+
+def _parse_session_datetime(value: str | None) -> datetime:
+    if not value:
+        return datetime.now(timezone.utc)
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def predict_decay(student_id: str) -> dict[str, Any]:
@@ -162,9 +177,7 @@ def predict_decay(student_id: str) -> dict[str, Any]:
 
     # Parse last session date
     try:
-        last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00"))
-        if last_date.tzinfo is None:
-            last_date = last_date.replace(tzinfo=timezone.utc)
+        last_date = _parse_session_datetime(last_date_str)
     except (ValueError, TypeError):
         last_date = datetime.now(timezone.utc)
 
@@ -181,36 +194,41 @@ def predict_decay(student_id: str) -> dict[str, Any]:
     # Current competency
     current_comp = _compute_competency(s0, lam, days_elapsed)
 
-    # Days until decay from last session
-    total_days = _days_until_threshold(s0, lam)
+    decay_days_total = _days_until_threshold(s0, lam, PROJECTED_DECAY_THRESHOLD)
 
     # Projected decay date & refresher date
     projected_decay_date = None
     refresher_date = None
     days_until_decay = None
 
-    if total_days is not None:
-        decay_dt = last_date + timedelta(days=total_days)
+    decay_dt = None
+    if decay_days_total is not None:
+        decay_dt = last_date + timedelta(days=decay_days_total)
         projected_decay_date = decay_dt.isoformat()
-
-        refresher_dt = decay_dt - timedelta(days=REFRESHER_BUFFER_DAYS)
-        if refresher_dt < now:
-            refresher_dt = now
-        refresher_date = refresher_dt.isoformat()
 
         if last_date.tzinfo is None:
             days_until_decay = (decay_dt - now.replace(tzinfo=None)).total_seconds() / 86400.0
         else:
             days_until_decay = (decay_dt - now).total_seconds() / 86400.0
 
+    if decay_dt is not None:
+        refresher_dt = decay_dt - timedelta(days=REFRESHER_BUFFER_DAYS)
+        refresher_date = refresher_dt.isoformat()
+
     refresher_needed = (
-        days_until_decay is not None and days_until_decay <= REFRESHER_BUFFER_DAYS
-    ) or current_comp < COMPETENCY_THRESHOLD
+        current_comp <= CRITICAL_COMPETENCY_THRESHOLD
+        or (days_until_decay is not None and days_until_decay <= 0)
+        or (
+            days_elapsed >= POST_SESSION_GRACE_DAYS
+            and decay_dt is not None
+            and now >= decay_dt - timedelta(days=REFRESHER_BUFFER_DAYS)
+        )
+    )
 
     return {
         "student_id": student_id,
         "total_sessions": len(sessions),
-        "last_session_date": last_date_str,
+        "last_session_date": last_date.isoformat(),
         "last_score": round(s0, 4),
         "decay_rate": round(lam, 4),
         "current_competency": round(max(0.0, min(1.0, current_comp)), 4),
