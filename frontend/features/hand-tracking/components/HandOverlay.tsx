@@ -64,12 +64,26 @@ function drawHand(
   landmarks: number[][],
   variant: "good" | "warn" | "bad",
 ) {
-  const { width, height } = canvas;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
   ctx.clearRect(0, 0, width, height);
 
   if (landmarks.length < 21) {
     return;
   }
+
+  const stage = canvas.parentElement;
+  const video = stage?.querySelector<HTMLVideoElement>("video.stage-video");
+  const sourceWidth = video?.videoWidth && video.videoWidth > 0 ? video.videoWidth : width;
+  const sourceHeight = video?.videoHeight && video.videoHeight > 0 ? video.videoHeight : height;
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const drawnWidth = sourceWidth * scale;
+  const drawnHeight = sourceHeight * scale;
+  const offsetX = (width - drawnWidth) / 2;
+  const offsetY = (height - drawnHeight) / 2;
+
+  const toCanvasX = (normalizedX: number) => offsetX + normalizedX * drawnWidth;
+  const toCanvasY = (normalizedY: number) => offsetY + normalizedY * drawnHeight;
 
   const palette = getPalette(variant);
   ctx.lineWidth = 2;
@@ -85,19 +99,35 @@ function drawHand(
     }
 
     ctx.beginPath();
-    ctx.moveTo(start[0] * width, start[1] * height);
-    ctx.lineTo(end[0] * width, end[1] * height);
+    ctx.moveTo(toCanvasX(start[0]), toCanvasY(start[1]));
+    ctx.lineTo(toCanvasX(end[0]), toCanvasY(end[1]));
     ctx.stroke();
   });
 
   landmarks.forEach((point, index) => {
-    const x = point[0] * width;
-    const y = point[1] * height;
+    const x = toCanvasX(point[0]);
+    const y = toCanvasY(point[1]);
     ctx.beginPath();
     ctx.fillStyle = index === 0 ? palette.wrist : palette.point;
     ctx.arc(x, y, index === 0 ? 5 : 3.6, 0, Math.PI * 2);
     ctx.fill();
   });
+}
+
+function syncCanvasSize(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayWidth = Math.max(1, Math.round(canvas.clientWidth));
+  const displayHeight = Math.max(1, Math.round(canvas.clientHeight));
+  const targetWidth = Math.round(displayWidth * dpr);
+  const targetHeight = Math.round(displayHeight * dpr);
+
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+
+  // Draw in CSS pixel coordinates regardless of DPR.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 type LandmarksDetail = {
@@ -107,6 +137,7 @@ type LandmarksDetail = {
 export default function HandOverlay({ landmarks, variant = "warn" }: HandOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const variantRef = useRef<"good" | "warn" | "bad">("warn");
+  const latestPointsRef = useRef<number[][]>([]);
 
   useEffect(() => {
     variantRef.current = variant;
@@ -123,13 +154,29 @@ export default function HandOverlay({ landmarks, variant = "warn" }: HandOverlay
       return;
     }
 
+    syncCanvasSize(canvas, ctx);
+
+    const redraw = () => {
+      syncCanvasSize(canvas, ctx);
+      drawHand(ctx, canvas, latestPointsRef.current, variantRef.current);
+    };
+
+    const ro = new ResizeObserver(redraw);
+    ro.observe(canvas);
+    window.addEventListener("resize", redraw);
+
     // If landmarks are provided via props, draw from props (controlled mode).
     if (Array.isArray(landmarks)) {
-      drawHand(ctx, canvas, landmarks, variantRef.current);
-      return;
+      latestPointsRef.current = landmarks;
+      redraw();
+      return () => {
+        ro.disconnect();
+        window.removeEventListener("resize", redraw);
+      };
     }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    latestPointsRef.current = [];
+    redraw();
 
     // Otherwise, subscribe directly to the camera landmark events.
     // This avoids re-rendering the whole page at camera FPS and keeps overlay smooth.
@@ -137,12 +184,15 @@ export default function HandOverlay({ landmarks, variant = "warn" }: HandOverlay
       const customEvent = event as CustomEvent<LandmarksDetail>;
       const points = customEvent.detail?.landmarks;
       if (Array.isArray(points)) {
-        drawHand(ctx, canvas, points, variantRef.current);
+        latestPointsRef.current = points;
+        redraw();
       }
     };
 
     window.addEventListener("skillsync:landmarks", handleLandmarks);
     return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", redraw);
       window.removeEventListener("skillsync:landmarks", handleLandmarks);
     };
   }, [landmarks]);

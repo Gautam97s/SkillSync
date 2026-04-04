@@ -43,4 +43,5 @@ class FrameResponse(BaseModel):
     procedure_steps: list[StepInfo] = []
     reset: bool = False
     difficulty: str = "beginner"
-    fatigue: FatigueInfo = Field(default_factory=_default_fatigue_info)
+session_saved: bool = False
+fatigue: FatigueInfo = Field(default_factory=_default_fatigue_info)

@@ -7,3 +7,4 @@ class FrameRequest(BaseModel):
     landmarks: list[list[float]]
     procedure_id: str
     difficulty: str = Field("beginner", description="beginner or intermediate")
+    student_id: str = Field("anonymous", description="Student identifier")
