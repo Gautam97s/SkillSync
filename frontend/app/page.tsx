@@ -123,6 +123,17 @@ function formatDaysUntilDecay(days: number | null | undefined): string {
   return `${normalized} day${normalized === 1 ? "" : "s"}`;
 }
 
+function formatSessionDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s duration`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s duration`;
+}
+
 export default function HomePage() {
   const { connected, reconnecting, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
@@ -622,7 +633,7 @@ export default function HomePage() {
                               <div><strong>{formatRetentionDate(session.completed_at)}</strong><p>{formatProcedureLabel(session.procedure_id)} · {session.difficulty}</p></div>
                               <div className="timeline-score">{Math.round(session.final_score * 100)}%</div>
                             </div>
-                            <div className="timeline-meta"><span>{session.passed === false ? "Needs review" : "Passed"}</span><span>{session.attempt_count} attempts</span><span>{Math.round(session.duration_ms / 1000)}s duration</span></div>
+                            <div className="timeline-meta"><span>{session.passed === false ? "Needs review" : "Passed"}</span><span>{session.attempt_count} attempts</span><span>{formatSessionDuration(session.duration_ms)}</span></div>
                           </div>
                         </li>
                       ))}

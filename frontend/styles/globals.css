@@ -31,6 +31,7 @@ body {
   max-width: none;
   margin: 0;
   padding: 14px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
   border-radius: 0;
   background: var(--neutral);
   box-shadow: none;
@@ -547,7 +548,7 @@ body {
   white-space: nowrap;
 }
 
-.diff-pill:hover {
+.diff-pill:hover:not(.diff-pill--active) {
   border-color: #a0cdd4;
   background: #edf7f8;
 }
@@ -557,6 +558,13 @@ body {
   background: linear-gradient(120deg, #067f9f, #0e9fc6);
   color: #fff;
   box-shadow: 0 2px 8px rgba(8, 145, 178, 0.22);
+}
+
+.diff-pill--active:hover,
+.diff-pill--active:focus-visible {
+  border-color: var(--primary);
+  background: linear-gradient(120deg, #067f9f, #0e9fc6);
+  color: #fff;
 }
 
 .primary-cta {
@@ -621,14 +629,26 @@ body {
   .topbar {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+    padding: 6px 6px 12px;
   }
 
   .brand-area {
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .top-nav {
     gap: 10px;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .top-nav-link {
+    white-space: nowrap;
   }
 
   .top-actions {
@@ -643,15 +663,166 @@ body {
   .session-pill {
     width: 100%;
     min-width: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
   }
 
   .hand-stage {
-    height: 500px;
+    height: clamp(320px, 62vh, 500px);
+    min-height: 320px;
   }
 
   .status-card--stage {
     width: min(94%, 520px);
     bottom: 12px;
+  }
+
+  .content-grid {
+    gap: 12px;
+    padding-top: 10px;
+  }
+
+  .viewer-panel,
+  .metric-card,
+  .angles-card,
+  .steps-card,
+  .analytics-preview-card {
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .metric-value {
+    font-size: 32px;
+  }
+
+  .analytics-shell,
+  .procedures-shell {
+    padding: 12px 2px 4px;
+  }
+
+  .analytics-card {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .analytics-hero {
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .timeline-score {
+    min-width: 0;
+    width: 100%;
+    max-width: 120px;
+  }
+
+  .chart-label-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .dashboard-shell {
+    padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .brand-name {
+    font-size: 24px;
+  }
+
+  .session-pill {
+    grid-template-columns: 1fr;
+    border-radius: 16px;
+    padding: 8px;
+  }
+
+  .student-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .viewer-badges {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .diff-inline {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .diff-pill {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .status-card {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .status-bars {
+    justify-content: flex-start;
+  }
+
+  .status-title {
+    font-size: 14px;
+  }
+
+  .status-subtitle {
+    font-size: 11px;
+  }
+
+  .angles-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .steps-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .analytics-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-preview-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .analytics-link-btn {
+    width: 100%;
+  }
+
+  .analytics-stat-block strong,
+  .analytics-mini-card strong,
+  .scoreboard-tile strong,
+  .analytics-preview-grid strong {
+    font-size: 22px;
+  }
+
+  .timeline-item {
+    grid-template-columns: 14px 1fr;
+    gap: 8px;
+  }
+
+  .timeline-card {
+    padding: 12px;
+  }
+
+  .timeline-meta {
+    gap: 6px;
+  }
+
+  .timeline-meta span {
+    width: 100%;
+    text-align: center;
   }
 }
 
