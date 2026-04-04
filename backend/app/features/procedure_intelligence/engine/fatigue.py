@@ -59,9 +59,13 @@ class FatigueDetector:
         self._jitter_trigger_minute: Optional[float] = None
         self._jitter_threshold: float = 0.4  # low stability => high jitter
 
-        # Current fatigue state
         self._current_score: float = 0.0
         self._current_level: FatigueLevel = FatigueLevel.FRESH
+
+        # Interval-based snapping
+        self._last_calculation_minute: float = -999.0  # Force initial calculation
+
+
 
     def start_session(self) -> None:
         """Call when a new practice session begins."""
@@ -77,6 +81,9 @@ class FatigueDetector:
         self._jitter_trigger_minute = None
         self._current_score = 0.0
         self._current_level = FatigueLevel.FRESH
+        self._last_calculation_minute = -999.0
+
+
 
     def record_break(self) -> None:
         """Call when user takes a break."""
@@ -127,25 +134,34 @@ class FatigueDetector:
                 warning_message=None,
             )
 
-        # Compute fatigue signals
-        time_fatigue = self._compute_time_fatigue(session_minutes)
-        stability_fatigue = self._compute_stability_fatigue()
-        error_fatigue = self._compute_error_fatigue()
-        degradation = self._compute_degradation()
+        # SNAP TO INTERVAL: Only recalculate score/level at checkpoint boundaries
+        interval = self._get_checkpoint_interval(session_minutes)
+        current_step = int(session_minutes / interval)
+        last_step = int(self._last_calculation_minute / interval)
 
-        fatigue_score = self._combine_signals(
-            time_fatigue=time_fatigue,
-            stability_fatigue=stability_fatigue,
-            error_fatigue=error_fatigue,
-            degradation=degradation,
-        )
+        if current_step > last_step:
+            # Compute fatigue signals
+            time_fatigue = self._compute_time_fatigue(session_minutes)
+            stability_fatigue = self._compute_stability_fatigue()
+            error_fatigue = self._compute_error_fatigue()
+            degradation = self._compute_degradation()
 
-        # Smooth output
-        alpha = 0.3
-        smoothed = alpha * fatigue_score + (1.0 - alpha) * self._current_score
-        self._current_score = max(0.0, min(1.0, smoothed))
+            fatigue_score = self._combine_signals(
+                time_fatigue=time_fatigue,
+                stability_fatigue=stability_fatigue,
+                error_fatigue=error_fatigue,
+                degradation=degradation,
+            )
 
-        self._current_level = self._classify(self._current_score)
+            # Smooth output
+            alpha = 0.3
+            smoothed = alpha * fatigue_score + (1.0 - alpha) * self._current_score
+            self._current_score = max(0.0, min(1.0, smoothed))
+            self._current_level = self._classify(self._current_score)
+            self._last_calculation_minute = session_minutes
+
+        degradation = self._compute_degradation()  # Still need current degradation for assessment object
+
 
         return FatigueAssessment(
             fatigue_level=self._current_level,
@@ -198,26 +214,30 @@ class FatigueDetector:
         """
         Time-based fatigue, accelerated if jitter was detected at a checkpoint.
         """
+        standard_fatigue = 0.0
+        if session_minutes <= 30.0:
+            standard_fatigue = 0.0
+        elif session_minutes <= 45.0:
+            standard_fatigue = 0.3 * ((session_minutes - 30.0) / 15.0)
+        elif session_minutes <= 60.0:
+            standard_fatigue = 0.3 + 0.3 * ((session_minutes - 45.0) / 15.0)
+        elif session_minutes <= 90.0:
+            standard_fatigue = 0.6 + 0.4 * ((session_minutes - 60.0) / 30.0)
+        else:
+            standard_fatigue = 1.0
+
+        accelerated_fatigue = 0.0
         if self._jitter_triggered and self._jitter_trigger_minute is not None:
             minutes_since_trigger = session_minutes - self._jitter_trigger_minute
             if minutes_since_trigger > 0:
                 if minutes_since_trigger <= 5.0:
-                    return 0.3 + 0.3 * (minutes_since_trigger / 5.0)
+                    accelerated_fatigue = 0.3 + 0.3 * (minutes_since_trigger / 5.0)
                 elif minutes_since_trigger <= 15.0:
-                    return 0.6 + 0.4 * ((minutes_since_trigger - 5.0) / 10.0)
+                    accelerated_fatigue = 0.6 + 0.4 * ((minutes_since_trigger - 5.0) / 10.0)
                 else:
-                    return 1.0
+                    accelerated_fatigue = 1.0
 
-        if session_minutes <= 30.0:
-            return 0.0
-        elif session_minutes <= 45.0:
-            return 0.3 * ((session_minutes - 30.0) / 15.0)
-        elif session_minutes <= 60.0:
-            return 0.3 + 0.3 * ((session_minutes - 45.0) / 15.0)
-        elif session_minutes <= 90.0:
-            return 0.6 + 0.4 * ((session_minutes - 60.0) / 30.0)
-        else:
-            return 1.0
+        return max(standard_fatigue, accelerated_fatigue)
 
     def _compute_stability_fatigue(self) -> float:
         if not self._stability_history:
