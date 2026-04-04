@@ -612,3 +612,175 @@ body {
     bottom: 12px;
   }
 }
+
+/* ── Student identification bar ──────────────────────────── */
+.student-bar {
+  padding: 0 24px;
+}
+
+.student-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #e6f7fa, #f0fcff);
+  border: 1.5px solid #c4e4ec;
+  border-radius: 16px;
+  padding: 10px 16px;
+}
+
+.student-bar-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.student-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a3a45;
+  outline: none;
+}
+
+.student-input::placeholder {
+  color: #7fa8b5;
+}
+
+.student-btn {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #067f9f, #0aa3cc);
+  color: #fff;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.student-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.student-btn:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+/* ── Skill Decay card ────────────────────────────────────── */
+.decay-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.decay-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.decay-head h2 {
+  margin: 0;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+  font-size: 16px;
+}
+
+.refresher-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  letter-spacing: 0.02em;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.decay-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.decay-stat {
+  border-radius: 10px;
+  background: #ecf6f7;
+  border: 1px solid #d6e8ea;
+  padding: 8px;
+  text-align: center;
+}
+
+.decay-stat-value {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+  color: #0a5e75;
+}
+
+.decay-stat-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5e8692;
+  font-weight: 600;
+}
+
+.decay-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.decay-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #4a7a88;
+}
+
+.decay-row strong {
+  color: #1a3a45;
+  font-size: 12px;
+}
+
+.decay-bar-track {
+  position: relative;
+  height: 6px;
+  border-radius: 99px;
+  background: #dbeff1;
+  overflow: visible;
+}
+
+.decay-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #e53935, #ff9800, #43a047);
+  transition: width 0.6s ease;
+}
+
+.decay-threshold {
+  position: absolute;
+  left: 70%;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: #d32f2f;
+  border-radius: 1px;
+}

@@ -11,6 +11,7 @@ from app.features.procedure_intelligence.engine.rules import validate_step
 from app.features.procedure_intelligence.engine.scoring import compute_score
 from app.features.procedure_intelligence.engine.schema import load_procedure_schema
 from app.features.procedure_intelligence.engine.stability import StabilityScorer
+from app.features.procedure_intelligence.engine.session_aggregator import SessionAggregator
 from app.features.procedure_intelligence.engine.state_machine import (
     get_current_step_id,
     next_step,
@@ -23,6 +24,8 @@ from app.features.realtime_feedback.schemas.response import FrameResponse, StepI
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
 _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
+_AGGREGATORS: dict[str, SessionAggregator] = {}
+
 _JOINT_OCCLUSION_BY_SESSION: dict[str, JointOcclusionEstimator] = {}
 
 _FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
@@ -192,6 +195,33 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
     score = compute_score(valid=validation_now.valid, stability=stability)
 
+    # 6) Session aggregation — accumulate metrics for decay prediction
+    agg_key = key
+    aggregator = _AGGREGATORS.get(agg_key)
+    if aggregator is None:
+        aggregator = SessionAggregator(
+            student_id=request.student_id,
+            procedure_id=request.procedure_id,
+            difficulty=request.difficulty,
+        )
+        _AGGREGATORS[agg_key] = aggregator
+
+    aggregator.feed_frame(
+        step_id=step_update.step_now,
+        valid=validation_now.valid,
+        score=score,
+        stability=stability,
+        timestamp_ms=request.timestamp_ms,
+    )
+
+    # 7) Persist session on procedure completion
+    session_saved = False
+    if step_update.step_now == "completed":
+        session_saved = True
+        if step_update.advanced:
+            result = aggregator.complete_session(timestamp_ms=request.timestamp_ms)
+            _AGGREGATORS.pop(agg_key, None)
+
     # Convert schema steps to StepInfo objects
     procedure_steps = [
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
@@ -231,5 +261,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
         difficulty=request.difficulty,
-        fatigue=fatigue_info,
+session_saved=session_saved,
+fatigue=fatigue_info,
     )
