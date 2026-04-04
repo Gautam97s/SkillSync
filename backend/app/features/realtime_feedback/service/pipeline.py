@@ -1,6 +1,9 @@
+from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
+from app.features.realtime_feedback.schemas.response import FatigueInfo
 from app.features.hand_tracking.cv.landmarks import normalize_landmarks
 from app.features.hand_tracking.feature_engineering.angles import compute_angles
 from app.features.hand_tracking.feature_engineering.distances import compute_distances
+from app.features.hand_tracking.feature_engineering.occlusion import JointOcclusionEstimator
 from app.features.hand_tracking.feature_engineering.smoothing import smooth_landmarks
 from app.features.hand_tracking.service.camera_runtime import get_camera_runtime
 from app.features.procedure_intelligence.engine.feedback import generate_feedback
@@ -23,6 +26,10 @@ _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
 _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
 _AGGREGATORS: dict[str, SessionAggregator] = {}
 
+_JOINT_OCCLUSION_BY_SESSION: dict[str, JointOcclusionEstimator] = {}
+
+_FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
+
 _ZERO_ANGLES: dict[str, float] = {
     "thumb_index_angle": 0.0,
     "wrist_finger_angle": 0.0,
@@ -40,8 +47,7 @@ _ZERO_DISTANCES: dict[str, float] = {
     "index_middle_over_palm": 0.0,
     "middle_below_index": 0.0,
 }
-
-
+  
 def _smooth_metric_map(
     *,
     key: str,
@@ -68,34 +74,61 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     camera_runtime = get_camera_runtime()
     source_landmarks = request.landmarks if request.landmarks else camera_runtime.latest_landmarks()
 
-    if not source_landmarks:
-        reset_session(procedure_id=request.procedure_id, session_key=session_key)
+    metric_key = session_key or request.procedure_id
+    estimator = _JOINT_OCCLUSION_BY_SESSION.get(metric_key)
+    if estimator is None:
+        estimator = JointOcclusionEstimator()
+        _JOINT_OCCLUSION_BY_SESSION[metric_key] = estimator
 
-        # Important: even when no hand is detected, still return the procedure steps
-        # so the frontend can render a consistent checklist (STEP 1 OF N).
-        schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
-        procedure_steps = [
-            StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
-        ]
-        return FrameResponse(
-            step=schema.steps[0].id,
-            valid=False,
-            score=0.0,
-            feedback=[],
-            landmarks=[],
-            angles=dict(_ZERO_ANGLES),
-            distances=dict(_ZERO_DISTANCES),
-            procedure_steps=procedure_steps,
-            reset=True,
-            difficulty=request.difficulty,
-        )
+    joint_confidence: dict[str, float] = {}
+    landmarks_estimated = False
+
+    if not source_landmarks:
+        # Estimation + fallback handling
+        estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
+
+        if estimate.expired or not estimate.landmarks:
+            reset_session(procedure_id=request.procedure_id, session_key=session_key)
+
+            schema = load_procedure_schema(
+                request.procedure_id,
+                difficulty=request.difficulty,
+            )
+
+            procedure_steps = [
+                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms)
+                for step in schema.steps
+            ]
+
+            return FrameResponse(
+                step=schema.steps[0].id,
+                valid=False,
+                score=0.0,
+                feedback=[],
+                landmarks=[],
+                joint_confidence=dict(estimate.joint_confidence),
+                landmarks_estimated=bool(estimate.estimated),
+                angles=dict(_ZERO_ANGLES),
+                distances=dict(_ZERO_DISTANCES),
+                procedure_steps=procedure_steps,
+                reset=True,
+                difficulty=request.difficulty,
+            )
+
+        source_landmarks = estimate.landmarks
+        joint_confidence = dict(estimate.joint_confidence)
+        landmarks_estimated = bool(estimate.estimated)
+    else:
+        estimate = estimator.observe(source_landmarks, timestamp_ms=request.timestamp_ms)
+        source_landmarks = estimate.landmarks
+        joint_confidence = dict(estimate.joint_confidence)
+        landmarks_estimated = bool(estimate.estimated)
 
     normalized = normalize_landmarks(source_landmarks)
     smoothed = smooth_landmarks(normalized, session_key=session_key)
     angles = compute_angles(smoothed)
     distances = compute_distances(smoothed)
 
-    metric_key = session_key or request.procedure_id
     angles = _smooth_metric_map(key=metric_key, metric_name="angles", values=angles)
     distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
@@ -194,16 +227,40 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
     ]
 
+    # 6) Fatigue detection
+    fatigue_key = session_key or request.procedure_id
+    fatigue_detector = _FATIGUE_BY_SESSION.get(fatigue_key)
+    if fatigue_detector is None:
+        fatigue_detector = FatigueDetector()
+        fatigue_detector.start_session()
+        _FATIGUE_BY_SESSION[fatigue_key] = fatigue_detector
+
+    fatigue_assessment = fatigue_detector.update(
+        stability_score=stability,
+        had_error=not validation_now.valid,
+    )
+
+    fatigue_info = FatigueInfo(
+        fatigue_level=fatigue_assessment.fatigue_level.value,
+        fatigue_score=fatigue_assessment.fatigue_score,
+        recommended_break_seconds=fatigue_assessment.recommended_break_seconds,
+        session_minutes=round(fatigue_detector.session_minutes, 1),
+        warning_message=fatigue_assessment.warning_message,
+    )
+
     return FrameResponse(
         step=step_update.step_now,
         valid=validation_now.valid,
         score=score,
         feedback=feedback,
         landmarks=source_landmarks,
+        joint_confidence=joint_confidence,
+        landmarks_estimated=landmarks_estimated,
         angles=angles,
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
         difficulty=request.difficulty,
-        session_saved=session_saved,
+session_saved=session_saved,
+fatigue=fatigue_info,
     )
