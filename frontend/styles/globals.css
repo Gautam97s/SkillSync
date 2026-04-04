@@ -363,12 +363,7 @@ body {
   font-size: 12px;
   line-height: 1.35;
 }
-  color: var(--primary);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-}
+
 
 .metric-chip {
   font-size: 10px;
@@ -594,6 +589,7 @@ body {
 }
 
 @keyframes pulse-glow {
+
   0%,
   100% {
     transform: rotate(-12deg) scale(1);
@@ -816,8 +812,10 @@ body {
       align-items: flex-start;
       gap: 6px;
     }
-  } */
-} */
+  } 
+}
+
+*/
 
 /* ── Student identification bar ──────────────────────────── */
 .student-bar {
@@ -909,8 +907,15 @@ body {
 }
 
 @keyframes pulse-badge {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .decay-grid {
