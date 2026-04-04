@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --primary: #0891b2;
   --secondary: #597c8a;
   --tertiary: #bc7f27;
@@ -500,7 +500,7 @@ body {
   opacity: 0.55;
 }
 
-/* ── Difficulty-level inline pills ─────────────────────────── */
+/* â”€â”€ Difficulty-level inline pills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .diff-inline {
   display: flex;
   gap: 6px;
@@ -620,7 +620,7 @@ body {
   }
 }
 
-/* ── Student identification bar ──────────────────────────── */
+/* â”€â”€ Student identification bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .student-bar {
   padding: 0 24px;
 }
@@ -676,7 +676,7 @@ body {
   opacity: 0.85;
 }
 
-/* ── Skill Decay card ────────────────────────────────────── */
+/* â”€â”€ Skill Decay card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .decay-card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -935,3 +935,382 @@ body {
   background: #d32f2f;
   border-radius: 1px;
 }
+.top-nav-link {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.analytics-preview-card {
+  margin-top: auto;
+  background: linear-gradient(155deg, #072c39, #0c5268 52%, #1590b1 100%);
+  color: #ecfdff;
+  border-radius: 24px;
+  padding: 18px;
+  border: 1px solid rgba(163, 226, 241, 0.24);
+  box-shadow: 0 20px 36px rgba(6, 50, 64, 0.28);
+}
+
+.analytics-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.analytics-preview-label,
+.analytics-kicker,
+.analytics-card-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  opacity: 0.78;
+}
+
+.analytics-preview-head h2,
+.analytics-card-head h3,
+.analytics-hero-copy h2 {
+  margin: 0;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+}
+
+.analytics-link-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #fff2d8;
+  color: #0b4c61;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.analytics-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.analytics-preview-grid div,
+.analytics-mini-card,
+.scoreboard-tile {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.analytics-preview-grid strong,
+.analytics-mini-card strong,
+.scoreboard-tile strong {
+  display: block;
+  font-size: 28px;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+}
+
+.analytics-preview-grid span,
+.analytics-mini-card span,
+.scoreboard-tile span,
+.analytics-stat-block span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.analytics-shell,
+.procedures-shell {
+  padding: 20px 4px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.analytics-hero {
+  display: grid;
+  grid-template-columns: 1.4fr auto;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+    linear-gradient(135deg, #062d39 0%, #0f6882 48%, #27b4ca 100%);
+  color: #ecfbff;
+  box-shadow: 0 24px 44px rgba(6, 47, 61, 0.24);
+}
+
+.analytics-hero-copy p {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: rgba(236, 251, 255, 0.82);
+}
+
+.analytics-hero-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.analytics-flag {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.analytics-flag--primary {
+  background: #fff3d0;
+  color: #855400;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 18px;
+}
+
+.analytics-grid--bottom {
+  grid-template-columns: 1.08fr 0.92fr;
+  align-items: start;
+}
+
+.analytics-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(179, 221, 229, 0.8);
+  border-radius: 28px;
+  padding: 20px;
+  box-shadow: 0 20px 34px rgba(9, 54, 68, 0.12);
+}
+
+.analytics-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pulse-meter {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #dbeef2;
+  margin-bottom: 18px;
+}
+
+.pulse-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f05a24, #f6a21a, #13b26b, #1db8d1);
+}
+
+.pulse-meter-threshold {
+  position: absolute;
+  top: -3px;
+  left: 55%;
+  width: 3px;
+  height: 22px;
+  background: #0c4152;
+}
+
+.analytics-stat-row,
+.analytics-mini-grid,
+.scoreboard-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.analytics-stat-row {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 12px;
+}
+
+.analytics-stat-block {
+  padding: 16px;
+  border-radius: 18px;
+  background: #f2fbfc;
+  border: 1px solid #d7edf0;
+}
+
+.analytics-stat-block strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 20px;
+  color: #083f50;
+}
+
+.analytics-mini-grid,
+.scoreboard-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.scoreboard-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.score-chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.chart-grid-line {
+  stroke: rgba(116, 161, 172, 0.24);
+  stroke-width: 1;
+}
+
+.chart-grid-label {
+  fill: #678793;
+  font-size: 12px;
+}
+
+.chart-line {
+  fill: none;
+  stroke: url(#score-line);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-point {
+  fill: #ffffff;
+  stroke: #0aa8c8;
+  stroke-width: 3;
+}
+
+.chart-label-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  color: #64838e;
+  font-size: 12px;
+}
+
+.session-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  max-height: 620px;
+  overflow-y: auto;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 12px;
+}
+
+.timeline-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #0ea7c8;
+  box-shadow: 0 0 0 6px rgba(14, 167, 200, 0.12);
+  margin-top: 8px;
+}
+
+.timeline-line {
+  position: absolute;
+  top: 24px;
+  bottom: -14px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(14, 167, 200, 0.5), rgba(14, 167, 200, 0.08));
+}
+
+.timeline-card {
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f9fdfe, #eff9fb);
+  border: 1px solid #d8edf1;
+}
+
+.timeline-card-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-card-main strong {
+  display: block;
+  color: #123745;
+}
+
+.timeline-card-main p,
+.analytics-empty {
+  margin: 6px 0 0;
+  color: #64818c;
+}
+
+.timeline-score {
+  min-width: 86px;
+  text-align: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0a4050, #13a4c3);
+  color: #f5fdff;
+  font-size: 28px;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+}
+
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.timeline-meta span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #e7f4f7;
+  color: #54717c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.analytics-empty--error {
+  color: #b42318;
+}
+
+@media (max-width: 1160px) {
+  .analytics-grid,
+  .analytics-grid--bottom,
+  .analytics-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-hero-badges {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 780px) {
+  .analytics-preview-grid,
+  .analytics-stat-row,
+  .analytics-mini-grid,
+  .scoreboard-grid,
+  .timeline-card-main {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-preview-head,
+  .timeline-card-main {
+    flex-direction: column;
+  }
+}
+

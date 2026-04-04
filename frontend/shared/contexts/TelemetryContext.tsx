@@ -19,7 +19,7 @@ const MAX_BACKOFF_MS = 10_000;
 
 export function TelemetryProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
   const backoffRef = useRef(INITIAL_BACKOFF_MS);
   const disposedRef = useRef(false);
 
