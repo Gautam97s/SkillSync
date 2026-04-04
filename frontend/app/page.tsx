@@ -5,6 +5,7 @@ import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 // import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
+import { API_BASE_URL } from "../shared/lib/constants";
 import type { DecayPrediction } from "../shared/lib/types";
 
 type LandmarksDetail = {
@@ -115,6 +116,8 @@ export default function HomePage() {
   const { connected, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
   const landmarksRef = useRef<number[][]>([]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [isStageFullscreen, setIsStageFullscreen] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const difficultyRef = useRef<Difficulty>("beginner");
   const [studentId, setStudentId] = useState("");
@@ -125,7 +128,7 @@ export default function HomePage() {
   const fetchDecay = useCallback(async (sid: string) => {
     if (!sid) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/students/${encodeURIComponent(sid)}/decay`);
+      const res = await fetch(`${API_BASE_URL}/api/students/${encodeURIComponent(sid)}/decay`);
       if (res.ok) {
         const data: DecayPrediction = await res.json();
         setDecay(data);
@@ -140,7 +143,7 @@ export default function HomePage() {
     setStudentConfirmed(true);
     // Create student in DB
     try {
-      await fetch("http://localhost:8000/api/students", {
+      await fetch(`${API_BASE_URL}/api/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ student_id: sid }),
@@ -148,6 +151,36 @@ export default function HomePage() {
     } catch { /* ignore */ }
     fetchDecay(sid);
   }, [studentId, fetchDecay]);
+
+  const toggleStageFullscreen = useCallback(async () => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    if (stage.requestFullscreen) {
+      await stage.requestFullscreen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const next = document.fullscreenElement === stageRef.current;
+      setIsStageFullscreen((prev) => (prev === next ? prev : next));
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    onFullscreenChange();
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -450,12 +483,21 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="hand-stage" aria-label="Live hand stage">
+          <div ref={stageRef} className="hand-stage" aria-label="Live hand stage">
             <div className="stage-glow" />
             <CameraFeed compact />
             <HandOverlay variant={overlayVariant} />
             {/* <ProtractorGuidance targetAngleDeg={90} toleranceDeg={12} softBandDeg={20} /> */}
             {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
+
+            <button
+              type="button"
+              className="stage-fullscreen-mobile-btn"
+              onClick={toggleStageFullscreen}
+              aria-label={isStageFullscreen ? "Exit camera feed fullscreen" : "Open camera feed fullscreen"}
+            >
+              {isStageFullscreen ? "⤡" : "⤢"}
+            </button>
 
             <div className="status-card status-card--stage">
               <div className="status-icon">A</div>

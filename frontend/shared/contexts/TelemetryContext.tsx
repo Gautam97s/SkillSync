@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { WS_URL } from "../lib/constants";
 import type { FrameResponse } from "../lib/types";
 
@@ -38,14 +38,19 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const send = (payload: unknown) => {
+  const send = useCallback((payload: unknown) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(payload));
     }
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ connected, latest, send }),
+    [connected, latest, send],
+  );
 
   return (
-    <TelemetryContext.Provider value={{ connected, latest, send }}>
+    <TelemetryContext.Provider value={value}>
       {children}
     </TelemetryContext.Provider>
   );
