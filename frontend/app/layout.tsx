@@ -26,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${figtree.variable} ${notoSans.variable} font-sans`}>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning className={`${figtree.variable} ${notoSans.variable} font-sans`}>
         <TelemetryProvider>
           {children}
         </TelemetryProvider>

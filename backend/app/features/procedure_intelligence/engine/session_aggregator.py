@@ -13,6 +13,7 @@ One instance per WebSocket session.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.database import get_db
@@ -137,8 +138,8 @@ class SessionAggregator:
             """
             INSERT INTO sessions
                 (student_id, procedure_id, difficulty, final_score,
-                 duration_ms, attempt_count, avg_hesitation_ms, tremor_score, passed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 duration_ms, attempt_count, avg_hesitation_ms, tremor_score, passed, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 self.student_id,
@@ -150,6 +151,7 @@ class SessionAggregator:
                 round(avg_hesitation_ms, 1),
                 round(tremor_score, 4),
                 1,  # passed = True (only called on completion)
+                datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc).isoformat(),
             ),
         )
 

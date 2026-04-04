@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -10,6 +12,19 @@ from app.features.procedure_intelligence.engine.decay_predictor import DecaySumm
 
 
 router = APIRouter(prefix="/api", tags=["students"])
+
+
+def _normalize_completed_at(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.isoformat()
 
 
 # ── Request / Response schemas ──────────────────────────────────────────
@@ -62,11 +77,13 @@ def get_sessions(student_id: str) -> list[dict]:
                avg_hesitation_ms, tremor_score, passed
         FROM sessions
         WHERE student_id = ?
-        ORDER BY completed_at DESC
+        ORDER BY completed_at DESC, id DESC
         LIMIT 50
         """,
         (student_id.strip().lower(),),
     )
+    for row in sessions:
+        row["completed_at"] = _normalize_completed_at(row.get("completed_at"))
     return sessions
 
 

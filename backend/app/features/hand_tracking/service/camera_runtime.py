@@ -1,10 +1,7 @@
-import threading
+﻿import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 
-import cv2
-
-from app.features.hand_tracking.cv.hand_tracker import HandTracker
 from app.shared.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,8 +11,9 @@ class CameraRuntime:
     def __init__(self, *, fps: int = 30, device_index: int = 0) -> None:
         self._fps = max(fps, 1)
         self._device_index = device_index
-        self._tracker: Optional[HandTracker] = None
-        self._capture: Optional[cv2.VideoCapture] = None
+        self._tracker: Any = None
+        self._capture: Any = None
+        self._cv2: Any = None
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -23,18 +21,34 @@ class CameraRuntime:
         self._latest_landmarks: list[list[float]] = []
         self._latest_timestamp_ms: int = 0
 
+    def _ensure_camera_deps(self) -> bool:
+        if self._cv2 is not None and self._tracker is not None:
+            return True
+
+        try:
+            import cv2  # type: ignore
+            from app.features.hand_tracking.cv.hand_tracker import HandTracker
+        except Exception as exc:
+            logger.warning("Camera runtime dependencies unavailable: %s", exc)
+            return False
+
+        self._cv2 = cv2
+        if self._tracker is None:
+            try:
+                self._tracker = HandTracker()
+            except Exception as exc:
+                logger.exception("Failed to initialize hand tracker: %s", exc)
+                return False
+        return True
+
     def start(self) -> bool:
         if self._running:
             return True
 
-        try:
-            if self._tracker is None:
-                self._tracker = HandTracker()
-        except Exception as exc:
-            logger.exception("Failed to initialize hand tracker: %s", exc)
+        if not self._ensure_camera_deps():
             return False
 
-        self._capture = cv2.VideoCapture(self._device_index)
+        self._capture = self._cv2.VideoCapture(self._device_index)
         if not self._capture.isOpened():
             logger.error("Failed to open camera device %s", self._device_index)
             self._capture.release()
