@@ -21,6 +21,7 @@ def _clear_session_state() -> None:
     pipeline._STABILITY_BY_SESSION.clear()
     pipeline._METRIC_HISTORY.clear()
     pipeline._JOINT_OCCLUSION_BY_SESSION.clear()
+    pipeline._FATIGUE_BY_SESSION.clear()
 
 
 class _StubCameraRuntime:

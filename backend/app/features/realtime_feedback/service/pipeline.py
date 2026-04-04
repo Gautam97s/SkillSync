@@ -1,11 +1,10 @@
-from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
-from app.features.realtime_feedback.schemas.response import FatigueInfo
 from app.features.hand_tracking.cv.landmarks import normalize_landmarks
 from app.features.hand_tracking.feature_engineering.angles import compute_angles
 from app.features.hand_tracking.feature_engineering.distances import compute_distances
 from app.features.hand_tracking.feature_engineering.occlusion import JointOcclusionEstimator
 from app.features.hand_tracking.feature_engineering.smoothing import smooth_landmarks
 from app.features.hand_tracking.service.camera_runtime import get_camera_runtime
+from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
 from app.features.procedure_intelligence.engine.feedback import generate_feedback
 from app.features.procedure_intelligence.engine.rules import validate_step
 from app.features.procedure_intelligence.engine.scoring import compute_score
@@ -13,12 +12,11 @@ from app.features.procedure_intelligence.engine.schema import load_procedure_sch
 from app.features.procedure_intelligence.engine.stability import StabilityScorer
 from app.features.procedure_intelligence.engine.state_machine import (
     get_current_step_id,
-    next_step,
     reset_session,
     update_step,
 )
 from app.features.realtime_feedback.schemas.request import FrameRequest
-from app.features.realtime_feedback.schemas.response import FrameResponse, StepInfo
+from app.features.realtime_feedback.schemas.response import FatigueInfo, FrameResponse, StepInfo
 
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
@@ -44,7 +42,18 @@ _ZERO_DISTANCES: dict[str, float] = {
     "index_middle_over_palm": 0.0,
     "middle_below_index": 0.0,
 }
-  
+
+
+def _neutral_fatigue_info() -> FatigueInfo:
+    return FatigueInfo(
+        fatigue_level="fresh",
+        fatigue_score=0.0,
+        recommended_break_seconds=0,
+        session_minutes=0.0,
+        warning_message=None,
+    )
+
+
 def _smooth_metric_map(
     *,
     key: str,
@@ -81,42 +90,37 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     landmarks_estimated = False
 
     if not source_landmarks:
-# --- Estimation + fallback handling ---
-estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
+        estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
+        if estimate.expired or not estimate.landmarks:
+            reset_session(procedure_id=request.procedure_id, session_key=session_key)
+            schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
+            procedure_steps = [
+                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
+            ]
+            return FrameResponse(
+                step=schema.steps[0].id,
+                valid=False,
+                score=0.0,
+                feedback=[],
+                landmarks=[],
+                joint_confidence=dict(estimate.joint_confidence),
+                landmarks_estimated=bool(estimate.estimated),
+                angles=dict(_ZERO_ANGLES),
+                distances=dict(_ZERO_DISTANCES),
+                procedure_steps=procedure_steps,
+                reset=True,
+                difficulty=request.difficulty,
+                fatigue=_neutral_fatigue_info(),
+            )
+        source_landmarks = estimate.landmarks
+        joint_confidence = dict(estimate.joint_confidence)
+        landmarks_estimated = bool(estimate.estimated)
+    else:
+        estimate = estimator.observe(source_landmarks, timestamp_ms=request.timestamp_ms)
+        source_landmarks = estimate.landmarks
+        joint_confidence = dict(estimate.joint_confidence)
+        landmarks_estimated = bool(estimate.estimated)
 
-if estimate.expired or not estimate.landmarks:
-    reset_session(procedure_id=request.procedure_id, session_key=session_key)
-
-    # Keep difficulty support (samarth) + estimator metadata (dev)
-    schema = load_procedure_schema(
-        request.procedure_id,
-        difficulty=getattr(request, "difficulty", None),
-    )
-
-    procedure_steps = [
-        StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms)
-        for step in schema.steps
-    ]
-
-    return FrameResponse(
-        step=schema.steps[0].id,
-        valid=False,
-        score=0.0,
-        feedback=[],
-        landmarks=[],
-        joint_confidence=dict(estimate.joint_confidence),
-        landmarks_estimated=bool(estimate.estimated),
-        angles=dict(_ZERO_ANGLES),
-        distances=dict(_ZERO_DISTANCES),
-        procedure_steps=procedure_steps,
-        reset=True,
-        difficulty=getattr(request, "difficulty", None),
-    )
-
-# --- Normal flow ---
-source_landmarks = estimate.landmarks
-joint_confidence = dict(estimate.joint_confidence)
-landmarks_estimated = bool(estimate.estimated)
     normalized = normalize_landmarks(source_landmarks)
     smoothed = smooth_landmarks(normalized, session_key=session_key)
     angles = compute_angles(smoothed)
@@ -193,7 +197,7 @@ landmarks_estimated = bool(estimate.estimated)
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
     ]
 
-        # 6) Fatigue detection
+    # 6) Fatigue detection
     fatigue_key = session_key or request.procedure_id
     fatigue_detector = _FATIGUE_BY_SESSION.get(fatigue_key)
     if fatigue_detector is None:
@@ -226,6 +230,6 @@ landmarks_estimated = bool(estimate.estimated)
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
-difficulty=request.difficulty,
-fatigue=fatigue_info,
+        difficulty=request.difficulty,
+        fatigue=fatigue_info,
     )

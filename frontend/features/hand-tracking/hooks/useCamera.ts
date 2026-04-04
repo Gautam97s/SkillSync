@@ -8,21 +8,80 @@ function sleep(ms: number) {
   });
 }
 
-async function getCameraStreamWithRetry(maxAttempts = 4): Promise<MediaStream> {
+function isMobileDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+async function getCameraStreamWithRetry(
+  preferredFacingMode: "user" | "environment",
+  maxAttempts = 4,
+): Promise<MediaStream> {
   let lastError: unknown;
+  const mobile = isMobileDevice();
+  const preferredConstraints: Array<MediaTrackConstraints | boolean> = mobile
+    ? [
+        {
+          facingMode: { exact: preferredFacingMode },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        {
+          facingMode: { ideal: preferredFacingMode },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        {
+          facingMode: { exact: preferredFacingMode === "user" ? "environment" : "user" },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        {
+          facingMode: { ideal: preferredFacingMode === "user" ? "environment" : "user" },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        {
+          width: { ideal: 960 },
+          height: { ideal: 540 },
+          frameRate: { ideal: 24, max: 30 },
+        },
+      ]
+    : [
+        {
+          facingMode: { ideal: "user" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        true,
+      ];
+
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-          audio: false,
-        });
-      } catch {
+      for (const video of preferredConstraints) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            video,
+            audio: false,
+          });
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (mobile) {
         return await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
         });
       }
+      throw lastError instanceof Error ? lastError : new Error("Camera unavailable");
     } catch (err) {
       lastError = err;
       const name = err instanceof DOMException ? err.name : "";
@@ -40,6 +99,8 @@ async function getCameraStreamWithRetry(maxAttempts = 4): Promise<MediaStream> {
 export function useCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [preferredFacingMode, setPreferredFacingMode] = useState<"user" | "environment">("user");
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -51,6 +112,7 @@ export function useCamera() {
 
     const startLandmarkLoop = async (videoEl: HTMLVideoElement) => {
       try {
+        const mobile = isMobileDevice();
         const vision = await import("@mediapipe/tasks-vision");
         if (stopped) {
           return;
@@ -71,14 +133,19 @@ export function useCamera() {
           },
           runningMode: "VIDEO",
           numHands: 1,
-          minHandDetectionConfidence: 0.3,
-          minHandPresenceConfidence: 0.3,
-          minTrackingConfidence: 0.3,
+          minHandDetectionConfidence: mobile ? 0.22 : 0.3,
+          minHandPresenceConfidence: mobile ? 0.22 : 0.3,
+          minTrackingConfidence: mobile ? 0.22 : 0.3,
         });
         if (stopped) {
           detector.close();
           return;
         }
+
+        let targetIntervalMs = mobile ? 40 : 33;
+        let missCount = 0;
+        let stableHitCount = 0;
+        const warmupUntil = performance.now() + 1800;
 
         const tick = () => {
           if (stopped) {
@@ -87,9 +154,43 @@ export function useCamera() {
           }
 
           if (videoEl.readyState >= 2) {
+            const startedAt = performance.now();
             const result = detector.detectForVideo(videoEl, performance.now());
             const landmarks =
               result.landmarks?.[0]?.map((point) => [point.x, point.y, point.z]) ?? [];
+            const detectTimeMs = performance.now() - startedAt;
+
+            if (mobile) {
+              const previousIntervalMs = targetIntervalMs;
+              const hasHand = landmarks.length > 0;
+
+              if (hasHand) {
+                missCount = 0;
+                stableHitCount += 1;
+              } else {
+                missCount += 1;
+                stableHitCount = 0;
+              }
+
+              if (performance.now() < warmupUntil) {
+                targetIntervalMs = 33;
+              } else if (!hasHand || missCount >= 3) {
+                targetIntervalMs = 33;
+              } else if (detectTimeMs > 52) {
+                targetIntervalMs = 83;
+              } else if (detectTimeMs > 36) {
+                targetIntervalMs = 66;
+              } else if (stableHitCount >= 10) {
+                targetIntervalMs = 50;
+              } else {
+                targetIntervalMs = 40;
+              }
+
+              if (intervalId !== null && previousIntervalMs !== targetIntervalMs) {
+                window.clearInterval(intervalId);
+                intervalId = window.setInterval(tick, targetIntervalMs);
+              }
+            }
 
             window.dispatchEvent(
               new CustomEvent("skillsync:landmarks", {
@@ -102,7 +203,7 @@ export function useCamera() {
         // requestAnimationFrame gets aggressively throttled/paused on background tabs.
         // Use an interval so we recover quickly when the tab becomes visible again.
         tick();
-        intervalId = window.setInterval(tick, 33);
+        intervalId = window.setInterval(tick, targetIntervalMs);
 
         visibilityHandler = () => {
           if (!stopped && document.visibilityState === "visible") {
@@ -130,7 +231,28 @@ export function useCamera() {
 
     const setup = async () => {
       try {
-        stream = await getCameraStreamWithRetry();
+        if (!window.isSecureContext) {
+          setCameraError(
+            "Camera needs HTTPS on phone. Open this app through an https tunnel like ngrok or cloudflared.",
+          );
+          setStreamReady(false);
+          return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setCameraError("This browser does not expose camera access.");
+          setStreamReady(false);
+          return;
+        }
+
+        setStreamReady(false);
+        window.dispatchEvent(
+          new CustomEvent("skillsync:landmarks", {
+            detail: { landmarks: [] },
+          }),
+        );
+        stream = await getCameraStreamWithRetry(preferredFacingMode);
+        setCameraError(null);
 
         // If React Strict Mode unmounted before getUserMedia resolved, release immediately.
         if (stopped) {
@@ -178,6 +300,23 @@ export function useCamera() {
         // eslint-disable-next-line no-console
         console.error("Camera access failed:", error);
         setStreamReady(false);
+        if (error instanceof DOMException) {
+          if (error.name === "NotAllowedError") {
+            setCameraError("Camera permission was denied. Allow camera access in Chrome site settings.");
+            return;
+          }
+          if (error.name === "NotFoundError") {
+            setCameraError("No camera was found on this device.");
+            return;
+          }
+          if (error.name === "NotReadableError") {
+            setCameraError("The camera is busy in another app. Close it and retry.");
+            return;
+          }
+          setCameraError(`${error.name}: ${error.message || "Camera access failed."}`);
+          return;
+        }
+        setCameraError("Camera access failed. Use HTTPS and allow camera permission.");
       }
     };
 
@@ -204,7 +343,19 @@ export function useCamera() {
       stream?.getTracks().forEach((track) => track.stop());
       stream = null;
     };
-  }, []);
+  }, [preferredFacingMode]);
 
-  return { videoRef, streamReady };
+  const switchCamera = () => {
+    setPreferredFacingMode((current) =>
+      current === "user" ? "environment" : "user",
+    );
+  };
+
+  return {
+    videoRef,
+    streamReady,
+    cameraError,
+    preferredFacingMode,
+    switchCamera,
+  };
 }

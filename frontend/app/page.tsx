@@ -1,14 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import CameraFeed from "../features/hand-tracking/components/CameraFeed";
-import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 // import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
 
-type LandmarksDetail = {
-  landmarks?: number[][];
-};
+const LiveStage = dynamic(
+  () => import("../features/hand-tracking/components/LiveStage"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="hand-stage">
+        <div className="stage-empty stage-empty--static">Preparing live camera view...</div>
+      </div>
+    ),
+  },
+);
 
 type OverlayVariant = "good" | "warn" | "bad";
 type Difficulty = "beginner" | "intermediate";
@@ -111,80 +118,17 @@ function getStepOverlayVariant(
 }
 
 export default function HomePage() {
-  const { connected, latest, send } = useTelemetry();
-  const frameCounter = useRef(0);
-  const landmarksRef = useRef<number[][]>([]);
+  const { connected, latest, setDifficulty: setEngineDifficulty } = useTelemetry();
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
-  const difficultyRef = useRef<Difficulty>("beginner");
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-    const handleLandmarks = (event: Event) => {
-      const customEvent = event as CustomEvent<LandmarksDetail>;
-      const points = customEvent.detail?.landmarks;
-      if (Array.isArray(points)) {
-        landmarksRef.current = points;
-      }
-    };
+    setEngineDifficulty(difficulty);
+  }, [difficulty, setEngineDifficulty]);
 
-    window.addEventListener("skillsync:landmarks", handleLandmarks);
-    return () => {
-      window.removeEventListener("skillsync:landmarks", handleLandmarks);
-    };
+  useEffect(() => {
+    setHasMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!connected) {
-      return;
-    }
-
-    // Keep scoring updates smooth without re-rendering the whole page at camera FPS.
-    // We send at ~10fps while visible, and immediately send once on tab refocus.
-    let intervalId: number | null = null;
-
-    const sendFrame = () => {
-      const now = Date.now();
-      send({
-        frame_id: frameCounter.current,
-        timestamp_ms: now,
-        landmarks: landmarksRef.current,
-        procedure_id: "surgical_knot_tying",
-        difficulty: difficultyRef.current,
-      });
-      frameCounter.current += 1;
-    };
-
-    const start = () => {
-      if (intervalId !== null) {
-        return;
-      }
-      sendFrame();
-      intervalId = window.setInterval(sendFrame, 100);
-    };
-
-    const stop = () => {
-      if (intervalId === null) {
-        return;
-      }
-      window.clearInterval(intervalId);
-      intervalId = null;
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        start();
-      } else {
-        stop();
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
-    onVisibility();
-
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [connected, send]);
 
   // Score + joint readouts: smooth **display only** (skeleton overlay stays raw / in sync with camera).
   const scoreEmaRef = useRef(0.942);
@@ -288,8 +232,28 @@ export default function HomePage() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const scorePercent = displayScorePercent;
-  const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
+  const safeLatest = hasMounted ? latest : null;
+  const scorePercent = hasMounted ? displayScorePercent : 94;
+  const primaryFeedback =
+    safeLatest?.feedback?.[0]?.message ??
+    "Hold position for 3 seconds to confirm joint stability.";
+  const secondaryFeedback =
+    safeLatest?.feedback?.[1]?.message ??
+    "Keep the full hand visible and hold still briefly after each adjustment.";
+  const captureState = safeLatest?.capture_state ?? "searching";
+  const captureChipLabel =
+    captureState === "tracked"
+      ? "TRACKING"
+      : captureState === "low_confidence"
+        ? "ADJUST VIEW"
+        : "SEARCHING";
+  const captureChipClass =
+    captureState === "tracked"
+      ? "metric-chip"
+      : captureState === "low_confidence"
+      ? "metric-chip metric-chip--alert"
+        : "metric-chip";
+  const captureConfidencePercent = Math.round((safeLatest?.avg_joint_confidence ?? 0) * 100);
 
   const stepDescriptions: Record<string, string> = {
     thumb_index_precision_grip: "Keep thumb and index finger close for precision grip.",
@@ -300,16 +264,16 @@ export default function HomePage() {
     completed: "Procedure completed successfully.",
   };
 
-  const procedureSteps = latest?.procedure_steps || [
+  const procedureSteps = safeLatest?.procedure_steps || [
     { id: "grip_init", dwell_time_ms: 700 },
     { id: "hold_steady", dwell_time_ms: 3000 },
     { id: "completed", dwell_time_ms: 0 },
   ];
-  const effectiveStepId = latest?.reset ? procedureSteps[0]?.id : latest?.step;
+  const effectiveStepId = safeLatest?.reset ? procedureSteps[0]?.id : safeLatest?.step;
   const overlayVariant = getStepOverlayVariant(
     effectiveStepId,
-    latest?.angles,
-    latest?.distances,
+    safeLatest?.angles,
+    safeLatest?.distances,
     difficulty,
   );
   const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
@@ -372,7 +336,7 @@ export default function HomePage() {
               <button
                 id="difficulty-beginner"
                 className={`diff-pill ${difficulty === "beginner" ? "diff-pill--active" : ""}`}
-                onClick={() => { setDifficulty("beginner"); difficultyRef.current = "beginner"; }}
+                onClick={() => setDifficulty("beginner")}
                 aria-pressed={difficulty === "beginner"}
               >
                 🟢 Beginner
@@ -380,7 +344,7 @@ export default function HomePage() {
               <button
                 id="difficulty-intermediate"
                 className={`diff-pill ${difficulty === "intermediate" ? "diff-pill--active" : ""}`}
-                onClick={() => { setDifficulty("intermediate"); difficultyRef.current = "intermediate"; }}
+                onClick={() => setDifficulty("intermediate")}
                 aria-pressed={difficulty === "intermediate"}
               >
                 🔶 Intermediate
@@ -388,13 +352,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="hand-stage" aria-label="Live hand stage">
-            <div className="stage-glow" />
-            <CameraFeed compact />
-            <HandOverlay variant={overlayVariant} />
-            {/* <ProtractorGuidance targetAngleDeg={90} toleranceDeg={12} softBandDeg={20} /> */}
-            {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
-
+          <div className="stage-shell">
+            <LiveStage connected={connected} overlayVariant={overlayVariant} />
             <div className="status-card status-card--stage">
               <div className="status-icon">A</div>
               <div>
@@ -414,7 +373,7 @@ export default function HomePage() {
           <article className="metric-card">
             <div className="metric-head">
               <span className="metric-icon">B</span>
-              <span className="metric-chip">OPTIMAL</span>
+              <span className={captureChipClass}>{captureChipLabel}</span>
             </div>
             <p className="metric-value">
               {scorePercent}
@@ -424,6 +383,9 @@ export default function HomePage() {
             <div className="progress-track">
               <span style={{ width: `${scorePercent}%` }} />
             </div>
+            <p className="metric-helper">
+              Camera confidence {captureConfidencePercent}% {captureState === "tracked" ? "with full-hand lock." : "needs a cleaner phone view."}
+            </p>
           </article>
 
           <article className="angles-card">
@@ -437,6 +399,14 @@ export default function HomePage() {
                 <p>PIP JOINT</p>
                 <strong>{displayAngles.pip.toFixed(1)} deg</strong>
               </div>
+            </div>
+          </article>
+
+          <article className="angles-card">
+            <h2>Live Direction</h2>
+            <div className="guidance-stack">
+              <p className="guidance-primary">{primaryFeedback}</p>
+              <p className="guidance-secondary">{secondaryFeedback}</p>
             </div>
           </article>
 

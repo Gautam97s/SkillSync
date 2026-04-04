@@ -9,6 +9,14 @@ export type StepInfo = {
   dwell_time_ms: number;
 };
 
+export type FatigueInfo = {
+  fatigue_level: "fresh" | "mild" | "moderate" | "high" | "critical";
+  fatigue_score: number;
+  recommended_break_seconds: number;
+  session_minutes: number;
+  warning_message: string | null;
+};
+
 export type FrameResponse = {
   step: string;
   valid: boolean;
@@ -22,4 +30,7 @@ export type FrameResponse = {
   procedure_steps?: StepInfo[];
   reset?: boolean;
   difficulty?: string;
+  fatigue?: FatigueInfo;
+  avg_joint_confidence?: number;
+  capture_state?: "searching" | "low_confidence" | "tracked";
 };
