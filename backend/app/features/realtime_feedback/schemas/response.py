@@ -34,3 +34,4 @@ class FrameResponse(BaseModel):
     reset: bool = False
     difficulty: str = "beginner"
     session_saved: bool = False
+    fatigue: Optional[FatigueInfo] = None

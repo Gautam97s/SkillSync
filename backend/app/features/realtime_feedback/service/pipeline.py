@@ -1,5 +1,3 @@
-from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
-from app.features.realtime_feedback.schemas.response import FatigueInfo
 from app.features.hand_tracking.cv.landmarks import normalize_landmarks
 from app.features.hand_tracking.feature_engineering.angles import compute_angles
 from app.features.hand_tracking.feature_engineering.distances import compute_distances
@@ -11,7 +9,6 @@ from app.features.procedure_intelligence.engine.rules import validate_step
 from app.features.procedure_intelligence.engine.scoring import compute_score
 from app.features.procedure_intelligence.engine.schema import load_procedure_schema
 from app.features.procedure_intelligence.engine.stability import StabilityScorer
-from app.features.procedure_intelligence.engine.session_aggregator import SessionAggregator
 from app.features.procedure_intelligence.engine.state_machine import (
     get_current_step_id,
     next_step,
@@ -24,11 +21,7 @@ from app.features.realtime_feedback.schemas.response import FrameResponse, StepI
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
 _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
-_AGGREGATORS: dict[str, SessionAggregator] = {}
-
 _JOINT_OCCLUSION_BY_SESSION: dict[str, JointOcclusionEstimator] = {}
-
-_FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
 
 _ZERO_ANGLES: dict[str, float] = {
     "thumb_index_angle": 0.0,
@@ -47,7 +40,8 @@ _ZERO_DISTANCES: dict[str, float] = {
     "index_middle_over_palm": 0.0,
     "middle_below_index": 0.0,
 }
-  
+
+
 def _smooth_metric_map(
     *,
     key: str,
@@ -84,22 +78,16 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     landmarks_estimated = False
 
     if not source_landmarks:
-        # Estimation + fallback handling
         estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
-
         if estimate.expired or not estimate.landmarks:
             reset_session(procedure_id=request.procedure_id, session_key=session_key)
 
-            schema = load_procedure_schema(
-                request.procedure_id,
-                difficulty=request.difficulty,
-            )
-
+            # Important: even when no hand is detected, still return the procedure steps
+            # so the frontend can render a consistent checklist (STEP 1 OF N).
+            schema = load_procedure_schema(request.procedure_id)
             procedure_steps = [
-                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms)
-                for step in schema.steps
+                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
             ]
-
             return FrameResponse(
                 step=schema.steps[0].id,
                 valid=False,
@@ -112,7 +100,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
                 distances=dict(_ZERO_DISTANCES),
                 procedure_steps=procedure_steps,
                 reset=True,
-                difficulty=request.difficulty,
             )
 
         source_landmarks = estimate.landmarks
@@ -133,7 +120,7 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
     distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
     # 1) Determine current step/session context
-    schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
+    schema = load_procedure_schema(request.procedure_id)
     current_step_id = get_current_step_id(
         procedure_id=request.procedure_id, session_key=session_key
     )
@@ -195,58 +182,10 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
     score = compute_score(valid=validation_now.valid, stability=stability)
 
-    # 6) Session aggregation — accumulate metrics for decay prediction
-    agg_key = key
-    aggregator = _AGGREGATORS.get(agg_key)
-    if aggregator is None:
-        aggregator = SessionAggregator(
-            student_id=request.student_id,
-            procedure_id=request.procedure_id,
-            difficulty=request.difficulty,
-        )
-        _AGGREGATORS[agg_key] = aggregator
-
-    aggregator.feed_frame(
-        step_id=step_update.step_now,
-        valid=validation_now.valid,
-        score=score,
-        stability=stability,
-        timestamp_ms=request.timestamp_ms,
-    )
-
-    # 7) Persist session on procedure completion
-    session_saved = False
-    if step_update.step_now == "completed":
-        session_saved = True
-        if step_update.advanced:
-            result = aggregator.complete_session(timestamp_ms=request.timestamp_ms)
-            _AGGREGATORS.pop(agg_key, None)
-
     # Convert schema steps to StepInfo objects
     procedure_steps = [
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
     ]
-
-    # 6) Fatigue detection
-    fatigue_key = session_key or request.procedure_id
-    fatigue_detector = _FATIGUE_BY_SESSION.get(fatigue_key)
-    if fatigue_detector is None:
-        fatigue_detector = FatigueDetector()
-        fatigue_detector.start_session()
-        _FATIGUE_BY_SESSION[fatigue_key] = fatigue_detector
-
-    fatigue_assessment = fatigue_detector.update(
-        stability_score=stability,
-        had_error=not validation_now.valid,
-    )
-
-    fatigue_info = FatigueInfo(
-        fatigue_level=fatigue_assessment.fatigue_level.value,
-        fatigue_score=fatigue_assessment.fatigue_score,
-        recommended_break_seconds=fatigue_assessment.recommended_break_seconds,
-        session_minutes=round(fatigue_detector.session_minutes, 1),
-        warning_message=fatigue_assessment.warning_message,
-    )
 
     return FrameResponse(
         step=step_update.step_now,
@@ -260,7 +199,4 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
-        difficulty=request.difficulty,
-session_saved=session_saved,
-fatigue=fatigue_info,
     )

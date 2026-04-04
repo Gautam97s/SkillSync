@@ -28,6 +28,11 @@ class FatigueDetector:
         stability_window_size: int = 120,
         baseline_readings: int = 20,
         warmup_seconds: float = 30.0,
+        fatigue_activation_start_minutes: float = 15.0,
+        fatigue_activation_full_minutes: float = 20.0,
+        score_smoothing_alpha: float = 0.08,
+        min_score_update_interval_seconds: float = 0.75,
+        max_score_step_per_interval: float = 0.015,
     ) -> None:
         # Time thresholds
         self._time_limit_minutes = session_time_limit_minutes
@@ -54,6 +59,23 @@ class FatigueDetector:
         # Warmup
         self._warmup_seconds = warmup_seconds
 
+        # Fatigue activation window (keeps score near-zero early in session)
+        self._fatigue_activation_start_minutes = max(
+            0.0, float(fatigue_activation_start_minutes)
+        )
+        self._fatigue_activation_full_minutes = max(
+            self._fatigue_activation_start_minutes + 0.1,
+            float(fatigue_activation_full_minutes),
+        )
+
+        # Score stabilization
+        self._score_smoothing_alpha = max(0.01, min(1.0, score_smoothing_alpha))
+        self._min_score_update_interval_seconds = max(
+            0.1, float(min_score_update_interval_seconds)
+        )
+        self._max_score_step_per_interval = max(0.001, float(max_score_step_per_interval))
+        self._last_score_update_ts: Optional[float] = None
+
         # Current state
         self._current_score: float = 0.0
         self._current_level: FatigueLevel = FatigueLevel.FRESH
@@ -69,6 +91,7 @@ class FatigueDetector:
         self._baseline_mean = None
         self._current_score = 0.0
         self._current_level = FatigueLevel.FRESH
+        self._last_score_update_ts = None
 
     def record_break(self) -> None:
         """Call when user takes a break."""
@@ -141,10 +164,32 @@ class FatigueDetector:
             degradation=degradation,
         )
 
-        # Smooth with previous score
-        alpha = 0.3
+        # Ramp fatigue contribution from 15 to 20 minutes.
+        fatigue_score *= self._activation_factor(session_minutes)
+
+        # Smooth with previous score and rate-limit changes so score remains steady.
+        # The detector may run at camera FPS; this keeps score movement gradual.
+        alpha = self._score_smoothing_alpha
         smoothed = alpha * fatigue_score + (1.0 - alpha) * self._current_score
-        self._current_score = max(0.0, min(1.0, smoothed))
+
+        if self._last_score_update_ts is None:
+            self._current_score = max(0.0, min(1.0, smoothed))
+            self._last_score_update_ts = now
+        else:
+            elapsed_since_update = now - self._last_score_update_ts
+            if elapsed_since_update >= self._min_score_update_interval_seconds:
+                scale = max(
+                    1.0,
+                    elapsed_since_update / self._min_score_update_interval_seconds,
+                )
+                allowed_step = self._max_score_step_per_interval * scale
+                delta = smoothed - self._current_score
+                if delta > allowed_step:
+                    delta = allowed_step
+                elif delta < -allowed_step:
+                    delta = -allowed_step
+                self._current_score = max(0.0, min(1.0, self._current_score + delta))
+                self._last_score_update_ts = now
 
         # Classify
         self._current_level = self._classify(self._current_score)
@@ -183,6 +228,31 @@ class FatigueDetector:
             return 0.6 + 0.4 * ((session_minutes - 60.0) / 30.0)
         else:
             return 1.0
+
+    def _activation_factor(self, session_minutes: float) -> float:
+        """
+        Return a 0..1 multiplier for fatigue score based on session age.
+
+        - <= activation start: 0.0
+        - activation start..activation full: linear ramp to 1.0
+        - >= activation full: 1.0
+        """
+        if session_minutes <= self._fatigue_activation_start_minutes:
+            return 0.0
+        if session_minutes >= self._fatigue_activation_full_minutes:
+            return 1.0
+
+        span = (
+            self._fatigue_activation_full_minutes
+            - self._fatigue_activation_start_minutes
+        )
+        return max(
+            0.0,
+            min(
+                1.0,
+                (session_minutes - self._fatigue_activation_start_minutes) / span,
+            ),
+        )
 
     def _compute_stability_fatigue(self) -> float:
         """Fatigue signal from average stability. Low stability = high fatigue."""

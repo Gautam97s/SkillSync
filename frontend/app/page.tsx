@@ -322,6 +322,17 @@ export default function HomePage() {
   }, []);
 
   const scorePercent = displayScorePercent;
+  const fatigueScorePercent = Math.max(
+    0,
+    Math.min(100, Math.round((latest?.fatigue?.fatigue_score ?? 0) * 100)),
+  );
+  const fatigueLevel = (latest?.fatigue?.fatigue_level ?? "fresh").toUpperCase();
+  const fatigueBreakSeconds = latest?.fatigue?.recommended_break_seconds ?? 0;
+  const fatigueNote =
+    latest?.fatigue?.warning_message ??
+    (fatigueBreakSeconds > 0
+      ? `Recommended break: ${fatigueBreakSeconds}s`
+      : "Fatigue is under control.");
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
   // Fetch decay prediction when a session is saved
@@ -391,36 +402,27 @@ export default function HomePage() {
           </nav>
         </div>
         <div className="top-actions">
-          <div className="search-pill">Search data...</div>
-          <button className="icon-btn" aria-label="Notifications">
-            N
-          </button>
-          <button className="icon-btn" aria-label="Settings">
-            S
-          </button>
-          <div className="avatar">{studentConfirmed ? studentId.slice(0, 2).toUpperCase() : "GH"}</div>
-        </div>
-      </header>
-
-      {!studentConfirmed && (
-        <div className="student-bar">
-          <div className="student-bar-inner">
-            <span className="student-bar-icon">👤</span>
+          <div className="session-pill">
             <input
               id="student-name-input"
-              className="student-input"
+              className="session-pill-input"
               type="text"
-              placeholder="Enter your name to start tracking..."
+              placeholder="Enter name"
               value={studentId}
               onChange={(e) => setStudentId(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") confirmStudent(); }}
+              disabled={studentConfirmed}
             />
-            <button className="student-btn" onClick={confirmStudent} disabled={!studentId.trim()}>
-              Start Session
+            <button
+              className="session-pill-btn"
+              onClick={confirmStudent}
+              disabled={!studentId.trim() || studentConfirmed}
+            >
+              {studentConfirmed ? "Session Active" : "Start Session"}
             </button>
           </div>
         </div>
-      )}
+      </header>
 
       <section className="content-grid">
         <section className="viewer-panel">
@@ -484,6 +486,22 @@ export default function HomePage() {
             <div className="progress-track">
               <span style={{ width: `${scorePercent}%` }} />
             </div>
+          </article>
+
+          <article className="metric-card">
+            <div className="metric-head">
+              <span className="metric-icon">F</span>
+              <span className="metric-chip">{fatigueLevel}</span>
+            </div>
+            <p className="metric-value">
+              {fatigueScorePercent}
+              <span>%</span>
+            </p>
+            <p className="metric-label">Fatigue Score</p>
+            <div className="progress-track">
+              <span style={{ width: `${fatigueScorePercent}%` }} />
+            </div>
+            <p className="metric-note">{fatigueNote}</p>
           </article>
 
           <article className="angles-card">

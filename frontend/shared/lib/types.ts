@@ -9,6 +9,14 @@ export type StepInfo = {
   dwell_time_ms: number;
 };
 
+export type FatigueInfo = {
+  fatigue_level: string;
+  fatigue_score: number;
+  recommended_break_seconds: number;
+  session_minutes: number;
+  warning_message?: string | null;
+};
+
 export type FrameResponse = {
   step: string;
   valid: boolean;
@@ -23,6 +31,7 @@ export type FrameResponse = {
   reset?: boolean;
   difficulty?: string;
   session_saved?: boolean;
+  fatigue?: FatigueInfo;
 };
 
 export type DecayPrediction = {
