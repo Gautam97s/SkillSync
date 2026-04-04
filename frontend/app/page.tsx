@@ -5,7 +5,7 @@ import CameraFeed from "../features/hand-tracking/components/CameraFeed";
 import HandOverlay from "../features/hand-tracking/components/HandOverlay";
 // import ProtractorGuidance from "../features/hand-tracking/components/ProtractorGuidance";
 import { useTelemetry } from "../shared/contexts/TelemetryContext";
-import type { DecayPrediction } from "../shared/lib/types";
+import type { DecayPrediction, SessionRecord } from "../shared/lib/types";
 
 type LandmarksDetail = {
   landmarks?: number[][];
@@ -111,8 +111,16 @@ function getStepOverlayVariant(
   }
 }
 
+/** Format ISO timestamps from the API for schedule labels (decay / refresher). */
+function formatRetentionDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 export default function HomePage() {
-  const { connected, latest, send } = useTelemetry();
+  const { connected, reconnecting, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
   const landmarksRef = useRef<number[][]>([]);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
@@ -121,22 +129,50 @@ export default function HomePage() {
   const studentIdRef = useRef("");
   const [studentConfirmed, setStudentConfirmed] = useState(false);
   const [decay, setDecay] = useState<DecayPrediction | null>(null);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [decayLoading, setDecayLoading] = useState(false);
+  const [decayFetchFailed, setDecayFetchFailed] = useState(false);
+  const prevStepRef = useRef<string | undefined>(undefined);
 
-  const fetchDecay = useCallback(async (sid: string) => {
+  /** Load decay model + raw session rows from SQLite for this learner. */
+  const loadUserDbData = useCallback(async (sid: string) => {
     if (!sid) return;
+    setDecayFetchFailed(false);
+    setDecayLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/students/${encodeURIComponent(sid)}/decay`);
-      if (res.ok) {
-        const data: DecayPrediction = await res.json();
+      const decayUrl = `http://localhost:8000/api/students/${encodeURIComponent(sid)}/decay`;
+      const sessionsUrl = `http://localhost:8000/api/students/${encodeURIComponent(sid)}/sessions`;
+      const [decayRes, sessionsRes] = await Promise.all([
+        fetch(decayUrl),
+        fetch(sessionsUrl),
+      ]);
+      if (decayRes.ok) {
+        const data: DecayPrediction = await decayRes.json();
         setDecay(data);
+      } else {
+        setDecay(null);
       }
-    } catch { /* backend may not be available yet */ }
+      if (sessionsRes.ok) {
+        const rows: SessionRecord[] = await sessionsRes.json();
+        setSessions(Array.isArray(rows) ? rows : []);
+      } else {
+        setSessions([]);
+      }
+      setDecayFetchFailed(!decayRes.ok);
+    } catch {
+      setDecayFetchFailed(true);
+      setDecay(null);
+      setSessions([]);
+    } finally {
+      setDecayLoading(false);
+    }
   }, []);
 
   const confirmStudent = useCallback(async () => {
     const sid = studentId.trim().toLowerCase();
     if (!sid) return;
     studentIdRef.current = sid;
+    prevStepRef.current = undefined;
     setStudentConfirmed(true);
     // Create student in DB
     try {
@@ -146,8 +182,8 @@ export default function HomePage() {
         body: JSON.stringify({ student_id: sid }),
       });
     } catch { /* ignore */ }
-    fetchDecay(sid);
-  }, [studentId, fetchDecay]);
+    loadUserDbData(sid);
+  }, [studentId, loadUserDbData]);
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -165,7 +201,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected || !studentConfirmed || !studentIdRef.current) {
       return;
     }
 
@@ -217,7 +253,7 @@ export default function HomePage() {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [connected, send]);
+  }, [connected, send, studentConfirmed]);
 
   // Score + joint readouts: smooth **display only** (skeleton overlay stays raw / in sync with camera).
   const scoreEmaRef = useRef(0.942);
@@ -324,12 +360,44 @@ export default function HomePage() {
   const scorePercent = displayScorePercent;
   const primaryFeedback = latest?.feedback?.[0]?.message ?? "Hold position for 3 seconds to confirm joint stability.";
 
-  // Fetch decay prediction when a session is saved
+  // Decay from WebSocket the moment a session is persisted; refresh session list from DB.
+  useEffect(() => {
+    const sd = latest?.skill_decay;
+    if (!sd) return;
+    setDecay(sd);
+    setDecayFetchFailed(false);
+    const sid = studentIdRef.current;
+    if (!sid) return;
+    void fetch(`http://localhost:8000/api/students/${encodeURIComponent(sid)}/sessions`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: SessionRecord[]) => {
+        setSessions(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {});
+  }, [latest?.skill_decay]);
+
+  // `session_saved` is only true for a single frame — refetch when we actually enter "completed"
+  // so the DB-backed decay/refresher dates always load in the bottom panel.
+  useEffect(() => {
+    const step = latest?.step;
+    const sid = studentIdRef.current;
+    if (!sid || !studentConfirmed) {
+      prevStepRef.current = step;
+      return;
+    }
+    const enteredCompleted = step === "completed" && prevStepRef.current !== "completed";
+    prevStepRef.current = step;
+    if (enteredCompleted) {
+      loadUserDbData(sid);
+    }
+  }, [latest?.step, studentConfirmed, loadUserDbData]);
+
+  // Extra backup when the server flags persistence (older clients / missed transition).
   useEffect(() => {
     if (latest?.session_saved && studentIdRef.current) {
-      fetchDecay(studentIdRef.current);
+      loadUserDbData(studentIdRef.current);
     }
-  }, [latest?.session_saved, fetchDecay]);
+  }, [latest?.session_saved, loadUserDbData]);
 
   const stepDescriptions: Record<string, string> = {
     thumb_index_precision_grip: "Keep thumb and index finger close for precision grip.",
@@ -353,6 +421,8 @@ export default function HomePage() {
     difficulty,
   );
   const currentStepIndex = procedureSteps.findIndex((s) => s.id === effectiveStepId);
+  const showCompletionSchedule =
+    effectiveStepId === "completed" && Boolean(decay && decay.total_sessions > 0);
 
   const steps = procedureSteps.map((step, index) => {
 
@@ -453,7 +523,13 @@ export default function HomePage() {
             <CameraFeed compact />
             <HandOverlay variant={overlayVariant} />
             {/* <ProtractorGuidance targetAngleDeg={90} toleranceDeg={12} softBandDeg={20} /> */}
-            {!connected && <div className="stage-empty">Waiting for backend websocket...</div>}
+            {!connected && (
+              <div className="stage-empty">
+                {reconnecting
+                  ? "Reconnecting to live scoring…"
+                  : "Waiting for backend websocket…"}
+              </div>
+            )}
 
             <div className="status-card status-card--stage">
               <div className="status-icon">A</div>
@@ -470,7 +546,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <aside className="insights-panel">
+        <aside className="insights-panel" aria-label="Live metrics and retention">
           <article className="metric-card">
             <div className="metric-head">
               <span className="metric-icon">B</span>
@@ -521,46 +597,132 @@ export default function HomePage() {
             </ul>
           </article>
 
-          {decay && decay.total_sessions > 0 && (
-            <article className="decay-card">
+          {studentConfirmed && (
+            <article className="decay-card decay-card--anchored">
               <div className="decay-head">
-                <h2>Skill Retention</h2>
-                {decay.refresher_needed && (
+                <div>
+                  <h2>Your data (from database)</h2>
+                  <p className="decay-user-tag">Learner: {studentId || studentIdRef.current}</p>
+                </div>
+                {decay && decay.total_sessions > 0 && decay.refresher_needed && (
                   <span className="refresher-badge">⚠️ REFRESHER NEEDED</span>
                 )}
               </div>
-              <div className="decay-grid">
-                <div className="decay-stat">
-                  <span className="decay-stat-value">{Math.round(decay.current_competency * 100)}%</span>
-                  <span className="decay-stat-label">Current Competency</span>
+              {decayLoading && sessions.length === 0 && !decay && (
+                <p className="decay-empty">Loading your history from the database…</p>
+              )}
+              {decayFetchFailed && !decay && !decayLoading && (
+                <p className="decay-empty decay-empty--error">
+                  Could not load your data. Check that the API is running at{" "}
+                  <code className="decay-code">localhost:8000</code> and try again.
+                </p>
+              )}
+              {sessions.length > 0 && (
+                <div className="session-db-section">
+                  <p className="session-db-headline">
+                    <strong>{sessions.length}</strong> completed procedure
+                    {sessions.length === 1 ? "" : "s"} on file for this learner (SQLite).
+                  </p>
+                  <ul className="session-db-list" aria-label="Past sessions from database">
+                    {sessions.slice(0, 10).map((s) => (
+                      <li key={s.id} className="session-db-item">
+                        <div className="session-db-item-main">
+                          <span>{formatRetentionDate(s.completed_at)}</span>
+                          <strong>{Math.round(s.final_score * 100)}% score</strong>
+                        </div>
+                        <div className="session-db-item-sub">
+                          {s.procedure_id} · {s.difficulty}
+                          {s.passed === false ? " · not passed" : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="decay-stat">
-                  <span className="decay-stat-value">{decay.total_sessions}</span>
-                  <span className="decay-stat-label">Total Sessions</span>
-                </div>
-              </div>
-              <div className="decay-details">
-                {decay.days_until_decay !== null && (
-                  <div className="decay-row">
-                    <span>📉 Projected Decay</span>
-                    <strong>{decay.days_until_decay > 0 ? `${Math.ceil(decay.days_until_decay)} days` : "Now"}</strong>
+              )}
+              {decay && decay.total_sessions > 0 && (
+                <>
+                  {showCompletionSchedule && (
+                    <div className="completion-schedule-banner" role="status" aria-live="polite">
+                      <p className="completion-schedule-title">Procedure complete — your retention schedule</p>
+                      <dl className="completion-schedule-dates">
+                        <div className="completion-schedule-block">
+                          <dt>Projected decay date</dt>
+                          <dd title={decay.projected_decay_date ?? undefined}>
+                            {formatRetentionDate(decay.projected_decay_date)}
+                          </dd>
+                          <p className="completion-schedule-hint">
+                            Estimated day competency may fall below the practice threshold.
+                          </p>
+                        </div>
+                        <div className="completion-schedule-block">
+                          <dt>Refresher date</dt>
+                          <dd title={decay.refresher_date ?? undefined}>
+                            {formatRetentionDate(decay.refresher_date)}
+                          </dd>
+                          <p className="completion-schedule-hint">
+                            Aim to review before this date to stay ahead of decay.
+                          </p>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
+                  <div className="decay-grid">
+                    <div className="decay-stat">
+                      <span className="decay-stat-value">{Math.round(decay.current_competency * 100)}%</span>
+                      <span className="decay-stat-label">Current Competency</span>
+                    </div>
+                    <div className="decay-stat">
+                      <span className="decay-stat-value">{decay.total_sessions}</span>
+                      <span className="decay-stat-label">Total Sessions</span>
+                    </div>
                   </div>
-                )}
-                {decay.refresher_date && (
-                  <div className="decay-row">
-                    <span>📅 Refresher Date</span>
-                    <strong>{new Date(decay.refresher_date).toLocaleDateString()}</strong>
+                  <div className="decay-details">
+                    {!showCompletionSchedule && (
+                      <>
+                        <div className="decay-row">
+                          <span>Projected decay date</span>
+                          <strong>{formatRetentionDate(decay.projected_decay_date)}</strong>
+                        </div>
+                        <div className="decay-row">
+                          <span>Refresher date</span>
+                          <strong>{formatRetentionDate(decay.refresher_date)}</strong>
+                        </div>
+                      </>
+                    )}
+                    {decay.days_until_decay !== null && (
+                      <div className="decay-row">
+                        <span>Days until projected decay</span>
+                        <strong>
+                          {decay.days_until_decay > 0 ? `${Math.ceil(decay.days_until_decay)} days` : "Now"}
+                        </strong>
+                      </div>
+                    )}
+                    {decay.last_session_date && (
+                      <div className="decay-row">
+                        <span>Last session</span>
+                        <strong>{formatRetentionDate(decay.last_session_date)}</strong>
+                      </div>
+                    )}
+                    <div className="decay-row">
+                      <span>Decay rate (λ)</span>
+                      <strong>{(decay.decay_rate * 100).toFixed(1)}%/day</strong>
+                    </div>
                   </div>
+                  <div className="decay-bar-track">
+                    <div className="decay-bar-fill" style={{ width: `${Math.round(decay.current_competency * 100)}%` }} />
+                    <div className="decay-threshold" />
+                  </div>
+                </>
+              )}
+              {!decayLoading &&
+                !decayFetchFailed &&
+                sessions.length === 0 &&
+                (!decay || decay.total_sessions === 0) && (
+                  <p className="decay-empty" style={{ margin: 0, fontSize: "0.9rem", opacity: 0.85 }}>
+                    Enter your name and complete a full procedure once. Your runs are saved per learner so we can
+                    show session count, decay date, and refresher date here.
+                  </p>
                 )}
-                <div className="decay-row">
-                  <span>📊 Decay Rate (λ)</span>
-                  <strong>{(decay.decay_rate * 100).toFixed(1)}%/day</strong>
-                </div>
-              </div>
-              <div className="decay-bar-track">
-                <div className="decay-bar-fill" style={{ width: `${Math.round(decay.current_competency * 100)}%` }} />
-                <div className="decay-threshold" />
-              </div>
             </article>
           )}
         </aside>

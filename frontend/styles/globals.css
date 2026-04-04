@@ -312,9 +312,16 @@ body {
 }
 
 .insights-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-content: start;
+  align-self: stretch;
+  min-height: 0;
+}
+
+/* Pin database / retention summary to the bottom of the right column (viewport-aligned). */
+.insights-panel .decay-card--anchored {
+  margin-top: auto;
 }
 
 .metric-card,
@@ -680,7 +687,8 @@ body {
 .decay-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -688,6 +696,149 @@ body {
   margin: 0;
   font-family: var(--font-figtree), "Segoe UI", sans-serif;
   font-size: 16px;
+}
+
+.decay-user-tag {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.decay-empty--error {
+  color: #b71c1c;
+}
+
+.decay-code {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f0f4f5;
+  border: 1px solid #d0dde0;
+}
+
+.session-db-section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2eef0;
+}
+
+.session-db-headline {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1a3a45;
+}
+
+.session-db-headline strong {
+  color: #0a5e75;
+  font-size: 15px;
+}
+
+.session-db-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.session-db-item {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f4fafb;
+  border: 1px solid #d6e8ea;
+}
+
+.session-db-item-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: #3d5c66;
+}
+
+.session-db-item-main strong {
+  color: #0a5e75;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-db-item-sub {
+  margin-top: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6a8f9a;
+}
+
+.completion-schedule-banner {
+  border-radius: 12px;
+  padding: 12px 12px 10px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #e8f6f4 0%, #d8eef3 55%, #cfe8f0 100%);
+  border: 1px solid #8ec5ce;
+}
+
+.completion-schedule-title {
+  margin: 0 0 10px;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #063d4d;
+  line-height: 1.35;
+}
+
+.completion-schedule-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .completion-schedule-dates {
+    grid-template-columns: 1fr;
+  }
+}
+
+.completion-schedule-block {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(142, 197, 206, 0.55);
+}
+
+.completion-schedule-dates dt {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4a7580;
+}
+
+.completion-schedule-dates dd {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-figtree), "Segoe UI", sans-serif;
+  color: #042f3c;
+  line-height: 1.3;
+}
+
+.completion-schedule-hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #5a7a85;
 }
 
 .refresher-badge {

@@ -1,4 +1,8 @@
+from typing import Optional
+
 from pydantic import BaseModel
+
+from app.features.procedure_intelligence.engine.decay_predictor import DecaySummary
 
 
 class FeedbackItem(BaseModel):
@@ -11,6 +15,12 @@ class StepInfo(BaseModel):
     id: str
     dwell_time_ms: int
 
+class FatigueInfo(BaseModel):
+    fatigue_level: str
+    fatigue_score: float
+    recommended_break_seconds: int
+    session_minutes: float
+    warning_message: Optional[str] = None
 
 class FrameResponse(BaseModel):
     step: str
@@ -18,9 +28,13 @@ class FrameResponse(BaseModel):
     score: float
     feedback: list[FeedbackItem]
     landmarks: list[list[float]] = []
+    joint_confidence: dict[str, float] = {}
+    landmarks_estimated: bool = False
     angles: dict[str, float] = {}
     distances: dict[str, float] = {}
     procedure_steps: list[StepInfo] = []
     reset: bool = False
     difficulty: str = "beginner"
     session_saved: bool = False
+    fatigue: Optional[FatigueInfo] = None
+    skill_decay: Optional[DecaySummary] = None
