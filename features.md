@@ -11,13 +11,13 @@
   - Description: Captures live hand movements using MediaPipe and extracts 21 hand landmarks per frame.
   - Output: (x, y, z) coordinates for each landmark in real time.
   - Backend Module: `backend/app/features/hand_tracking/cv/hand_tracker.py`
-  - Build Order: **FIRST** — Everything depends on accurate landmark detection.
+  - Build Order: **FIRST** ï¿½ Everything depends on accurate landmark detection.
 
 - **1.2 Feature Extraction (Angles, Distances, Positions)**
   - Description: Processes raw landmarks to compute meaningful features such as joint angles, finger distances, and positional zones.
   - Output: Computed angles, inter-finger distances, grip position, zone location.
   - Backend Modules: `backend/app/features/hand_tracking/feature_engineering/`
-  - Build Order: **SECOND** — Raw coordinates must be converted into usable signals.
+  - Build Order: **SECOND** ï¿½ Raw coordinates must be converted into usable signals.
 
 ---
 
@@ -28,7 +28,7 @@
   - Description: Defines the sequence of steps (e.g., correct grip ? hold ? release ? complete) and ensures they are followed in order.
   - Output: Step progression state, current step ID, next expected step.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/state_machine.py`
-  - Build Order: **THIRD** — Introduces structure for guided procedure execution.
+  - Build Order: **THIRD** ï¿½ Introduces structure for guided procedure execution.
   - Schema Example:
     ```json
     {
@@ -39,7 +39,7 @@
           "description": "Correct grip position",
           "constraints": {
             "thumb_index_angle": {"min": 20, "max": 45},
-            "grip_distance": {"max": 0.15}
+            "thumb_index_distance": {"max": 0.15}
           },
           "dwell_time_ms": 500,
           "next_step": "hold_steady"
@@ -57,19 +57,19 @@
   - Description: Validates whether the user''s hand posture meets defined constraints from the procedure schema.
   - Output: Valid/Invalid status, deviation magnitude, constraint that was violated.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/rules.py`
-  - Build Order: **FOURTH** — Core correctness checking.
+  - Build Order: **FOURTH** ï¿½ Core correctness checking.
 
 - **3.2 Step Completion & Timing Validation**
   - Description: Ensures each step is held correctly for a required duration (dwell time) before marking it as complete.
   - Output: Step completion flag, time held, time remaining.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/state_machine.py`
-  - Build Order: **SIXTH** — Prevents false positives from momentary correct positions.
+  - Build Order: **SIXTH** ï¿½ Prevents false positives from momentary correct positions.
 
 - **3.3 Explainable Feedback Engine**
-  - Description: Generates real-time, actionable feedback with numerical explanations (e.g., "Increase thumb-index angle by +6°" or "Hold this position for 2 more seconds").
+  - Description: Generates real-time, actionable feedback with numerical explanations (e.g., "Increase thumb-index angle by +6ï¿½" or "Hold this position for 2 more seconds").
   - Output: Feedback items with code, message, severity, and numeric correction hint.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/feedback.py`
-  - Build Order: **FIFTH** — Transforms validation into user guidance.
+  - Build Order: **FIFTH** ï¿½ Transforms validation into user guidance.
 
 ---
 
@@ -80,13 +80,13 @@
   - Description: Displays camera feed, hand skeleton overlay with joints and edges, step progress checklist, feedback messages, stability score, and fatigue level.
   - Output: Live interactive dashboard with real-time updates via WebSocket.
   - Frontend Modules: `frontend/features/hand-tracking/`, `frontend/features/realtime-feedback/`, `frontend/features/step-tracker/`
-  - Build Order: **LAST (9th)** — UI depends on all backend outputs being stable.
+  - Build Order: **LAST (9th)** ï¿½ UI depends on all backend outputs being stable.
   - Components:
-    - Camera feed (live video) — `frontend/features/hand-tracking/components/CameraFeed.tsx`
-    - Hand skeleton overlay (21 joints + edges) — `frontend/features/hand-tracking/components/HandOverlay.tsx`
-    - Step tracker (completed ? | active ? | pending ?) — `frontend/features/step-tracker/components/StepTracker.tsx`
-    - Feedback panel (corrective messages) — `frontend/features/realtime-feedback/components/FeedbackPanel.tsx`
-    - Metrics display (stability score, angles, distances) — `frontend/features/realtime-feedback/components/Metrics.tsx`
+    - Camera feed (live video) ï¿½ `frontend/features/hand-tracking/components/CameraFeed.tsx`
+    - Hand skeleton overlay (21 joints + edges) ï¿½ `frontend/features/hand-tracking/components/HandOverlay.tsx`
+    - Step tracker (completed ? | active ? | pending ?) ï¿½ `frontend/features/step-tracker/components/StepTracker.tsx`
+    - Feedback panel (corrective messages) ï¿½ `frontend/features/realtime-feedback/components/FeedbackPanel.tsx`
+    - Metrics display (stability score, angles, distances) ï¿½ `frontend/features/realtime-feedback/components/Metrics.tsx`
 
 ---
 
@@ -97,13 +97,13 @@
   - Description: Measures how steady the hand is by analyzing landmark coordinate variance and jitter over a time window.
   - Output: Stability score (0.0 to 1.0), tremor level, variance metrics.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/scoring.py`
-  - Build Order: **SEVENTH** — Builds on raw feature data.
+  - Build Order: **SEVENTH** ï¿½ Builds on raw feature data.
 
 - **5.2 Fatigue Detection Module**
   - Description: Detects increasing instability (jitter, variance, repeated errors) over time to estimate user fatigue and suggest breaks.
   - Output: Fatigue level, recommended break duration, performance degradation warning.
   - Backend Module: `backend/app/features/procedure_intelligence/engine/feedback.py` (extended)
-  - Build Order: **EIGHTH** — Builds on stability metrics for higher-level behavioral insight.
+  - Build Order: **EIGHTH** ï¿½ Builds on stability metrics for higher-level behavioral insight.
 
 ---
 
@@ -189,12 +189,12 @@ Priority 9: UI & Visualization
 
 # ?? Implementation Notes
 
-- **Do not skip order** — Each priority depends on the previous one.
-- **Parallel tracks** — Members 1 & 2 work in parallel first, Member 3 joins as soon as WebSocket contract is defined.
-- **Member 4 owns integration** — Catches bugs and integration breaks immediately.
-- **JSON schema is critical** — Finalize procedure schema format early (Priority 3) so Member 2 can validate against it.
-- **Test with real data** — Use a real medical or vocational procedure (e.g., surgical knot tying, dental crown prep) as the test case.
-- **Daily syncs** — 15-minute standups to catch blockers early.
+- **Do not skip order** ï¿½ Each priority depends on the previous one.
+- **Parallel tracks** ï¿½ Members 1 & 2 work in parallel first, Member 3 joins as soon as WebSocket contract is defined.
+- **Member 4 owns integration** ï¿½ Catches bugs and integration breaks immediately.
+- **JSON schema is critical** ï¿½ Finalize procedure schema format early (Priority 3) so Member 2 can validate against it.
+- **Test with real data** ï¿½ Use a real medical or vocational procedure (e.g., surgical knot tying, dental crown prep) as the test case.
+- **Daily syncs** ï¿½ 15-minute standups to catch blockers early.
 
 ---
 
@@ -203,7 +203,7 @@ Priority 9: UI & Visualization
 **Procedure:** Surgeon learns to tie a surgical knot correctly
 
 **Steps:**
-1. Grip thread with thumb-index pinch (angle 20-45°, distance < 0.15)
+1. Grip thread with thumb-index pinch (angle 20-45ï¿½, distance < 0.15)
 2. Hold position for 500ms (stability > 0.7)
 3. Cross threads without tremor (stability > 0.75)
 4. Pull complete (force detection via jitter analysis)

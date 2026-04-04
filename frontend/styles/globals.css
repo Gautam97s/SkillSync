@@ -351,26 +351,18 @@ body {
   align-content: start;
 }
 
-.metric-card,
-.angles-card,
-.steps-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 12px 14px;
+.metric-label {
+  margin: 0;
+  color: #4f6f79;
+  font-size: 13px;
 }
 
-.metric-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.metric-note {
+  margin: 8px 0 0;
+  color: #5d7780;
+  font-size: 12px;
+  line-height: 1.35;
 }
-
-.metric-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: #d8edf0;
   color: var(--primary);
   display: grid;
   place-items: center;
@@ -637,130 +629,194 @@ body {
     padding: 6px 4px 12px;
   }
 
-  .brand-area {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    .viewer-badges {
+      flex-wrap: wrap;
+    }
+
+    .camera-switch-btn {
+      top: 12px;
+      right: 12px;
+      padding: 8px 12px;
+    }
+
+    .stage-fullscreen-btn {
+      top: 12px;
+      left: 12px;
+      padding: 8px 12px;
+    }
   }
 
-  .top-nav {
-    gap: 10px;
-    width: 100%;
-    overflow-x: auto;
-    white-space: nowrap;
+  @media (orientation: landscape) and (max-height: 520px) {
+    .dashboard-shell {
+      margin: 4px;
+      padding: 8px;
+    }
+
+    .topbar {
+      padding: 6px 8px 10px;
+      gap: 10px;
+    }
+
+    .brand-area {
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .top-nav {
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .top-actions {
+      gap: 8px;
+    }
+
+    .search-pill {
+      min-width: 160px;
+      padding: 8px 12px;
+    }
+
+    .content-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding-top: 12px;
+    }
+
+    .viewer-panel {
+      min-height: auto;
+      padding: 12px;
+    }
+
+    .viewer-badges {
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .hand-stage {
+      height: min(68vh, 320px);
+    }
+
+    .camera-switch-btn {
+      top: 10px;
+      right: 10px;
+      padding: 7px 11px;
+      font-size: 10px;
+    }
+
+    .stage-fullscreen-btn {
+      top: 10px;
+      left: 10px;
+      padding: 7px 11px;
+      font-size: 10px;
+    }
+
+    .status-card {
+      width: min(96%, 520px);
+      padding: 10px 12px;
+      gap: 10px;
+    }
+
+    .status-title {
+      font-size: 14px;
+    }
+
+    .status-subtitle {
+      font-size: 11px;
+    }
+
+    .insights-panel {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric-card,
+    .angles-card,
+    .steps-card {
+      padding: 10px 12px;
+    }
+
+    .metric-value {
+      font-size: 30px;
+    }
+
+    .angles-grid strong {
+      font-size: 16px;
+    }
+
+    .steps-head span {
+      font-size: 9px;
+    }
+
+    .steps-list {
+      gap: 4px;
+    }
+
+    .step-row p {
+      font-size: 12px;
+    }
+
+    .step-row small {
+      font-size: 10px;
+    }
   }
 
-  .top-actions {
-    width: 100%;
-  }
+  /* @media (max-width: 560px) {
+    .brand-name {
+      font-size: 24px;
+    }
 
-  .session-pill {
-    flex: 1;
-    min-width: 0;
-  }
+    .session-pill {
+      flex-direction: column;
+      align-items: stretch;
+      border-radius: 14px;
+      padding: 8px;
+      gap: 6px;
+    }
 
-  .session-pill-btn {
-    padding: 7px 10px;
-    font-size: 11px;
-  }
+    .session-pill-input {
+      min-height: 36px;
+      padding: 0 4px;
+    }
 
-  .hand-stage {
-    height: 500px;
-  }
+    .session-pill-btn {
+      width: 100%;
+      min-height: 40px;
+      font-size: 12px;
+    }
 
-  .status-card--stage {
-    width: min(94%, 520px);
-    bottom: 12px;
-  }
+    .badge {
+      padding: 6px 10px;
+      font-size: 10px;
+    }
 
-  .viewer-panel {
-    min-height: 0;
-    padding: 12px;
-    border-radius: 18px;
-  }
+    .hand-stage {
+      height: 380px;
+      border-radius: 16px;
+    }
 
-  .viewer-badges {
-    flex-wrap: wrap;
-    margin-bottom: 10px;
-  }
+    .status-card {
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+    }
 
-  .diff-inline {
-    width: 100%;
-    margin-left: 0;
-  }
+    .status-bars {
+      display: none;
+    }
 
-  .diff-pill {
-    flex: 1;
-    justify-content: center;
-    min-height: 42px;
-  }
+    .metric-value {
+      font-size: 30px;
+    }
 
-  .content-grid {
-    gap: 12px;
-    padding: 12px 2px 2px;
-  }
+    .angles-grid {
+      grid-template-columns: 1fr;
+    }
 
-  .insights-panel {
-    gap: 8px;
-  }
-} */
-
-/* @media (max-width: 560px) {
-  .brand-name {
-    font-size: 24px;
-  }
-
-  .session-pill {
-    flex-direction: column;
-    align-items: stretch;
-    border-radius: 14px;
-    padding: 8px;
-    gap: 6px;
-  }
-
-  .session-pill-input {
-    min-height: 36px;
-    padding: 0 4px;
-  }
-
-  .session-pill-btn {
-    width: 100%;
-    min-height: 40px;
-    font-size: 12px;
-  }
-
-  .badge {
-    padding: 6px 10px;
-    font-size: 10px;
-  }
-
-  .hand-stage {
-    height: 380px;
-    border-radius: 16px;
-  }
-
-  .status-card {
-    grid-template-columns: 28px 1fr;
-    gap: 8px;
-    padding: 10px 12px;
-  }
-
-  .status-bars {
-    display: none;
-  }
-
-  .metric-value {
-    font-size: 30px;
-  }
-
-  .angles-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .steps-head {
-    align-items: flex-start;
-    gap: 6px;
-  }
+    .steps-head {
+      align-items: flex-start;
+      gap: 6px;
+    }
+  } */
 } */
 
 /* ── Student identification bar ──────────────────────────── */

@@ -10,10 +10,13 @@ export type StepInfo = {
 };
 
 export type FatigueInfo = {
-  fatigue_level: string;
+  // ✅ keep strict enum (better than string)
+  fatigue_level: "fresh" | "mild" | "moderate" | "high" | "critical";
   fatigue_score: number;
   recommended_break_seconds: number;
   session_minutes: number;
+
+  // ✅ keep optional (safer for backend variability)
   warning_message?: string | null;
 };
 
@@ -22,16 +25,25 @@ export type FrameResponse = {
   valid: boolean;
   score: number;
   feedback: FeedbackItem[];
+
   landmarks?: number[][];
   joint_confidence?: Record<string, number>;
   landmarks_estimated?: boolean;
+
   angles?: Record<string, number>;
   distances?: Record<string, number>;
+
   procedure_steps?: StepInfo[];
   reset?: boolean;
   difficulty?: string;
+
+  // ✅ keep both
   session_saved?: boolean;
   fatigue?: FatigueInfo;
+
+  // ✅ keep telemetry fields
+  avg_joint_confidence?: number;
+  capture_state?: "searching" | "low_confidence" | "tracked";
 };
 
 export type DecayPrediction = {
