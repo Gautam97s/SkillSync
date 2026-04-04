@@ -5,8 +5,9 @@ import sys
 import time
 from dataclasses import dataclass
 from typing import Any
+import pytest
 
-import cv2
+cv2 = pytest.importorskip("cv2", reason="OpenCV is required for live camera websocket tests")
 import websockets
 
 # Ensure the backend directory is in the path to allow absolute imports from app module

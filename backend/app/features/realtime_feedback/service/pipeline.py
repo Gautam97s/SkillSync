@@ -1,6 +1,9 @@
+from app.features.procedure_intelligence.engine.decay_predictor import DecaySummary, predict_decay
+from app.features.procedure_intelligence.engine.fatigue import FatigueDetector
 from app.features.hand_tracking.cv.landmarks import normalize_landmarks
 from app.features.hand_tracking.feature_engineering.angles import compute_angles
 from app.features.hand_tracking.feature_engineering.distances import compute_distances
+from app.features.hand_tracking.feature_engineering.occlusion import JointOcclusionEstimator
 from app.features.hand_tracking.feature_engineering.smoothing import smooth_landmarks
 from app.features.hand_tracking.service.camera_runtime import get_camera_runtime
 from app.features.procedure_intelligence.engine.feedback import generate_feedback
@@ -8,17 +11,39 @@ from app.features.procedure_intelligence.engine.rules import validate_step
 from app.features.procedure_intelligence.engine.scoring import compute_score
 from app.features.procedure_intelligence.engine.schema import load_procedure_schema
 from app.features.procedure_intelligence.engine.stability import StabilityScorer
+from app.features.procedure_intelligence.engine.session_aggregator import SessionAggregator
 from app.features.procedure_intelligence.engine.state_machine import (
     get_current_step_id,
-    next_step,
+    reset_session,
     update_step,
 )
 from app.features.realtime_feedback.schemas.request import FrameRequest
-from app.features.realtime_feedback.schemas.response import FrameResponse, StepInfo
+from app.features.realtime_feedback.schemas.response import FatigueInfo, FrameResponse, StepInfo
 
 
 _STABILITY_BY_SESSION: dict[str, StabilityScorer] = {}
 _METRIC_HISTORY: dict[str, dict[str, dict[str, float]]] = {}
+_AGGREGATORS: dict[str, SessionAggregator] = {}
+_JOINT_OCCLUSION_BY_SESSION: dict[str, JointOcclusionEstimator] = {}
+_FATIGUE_BY_SESSION: dict[str, FatigueDetector] = {}
+
+_ZERO_ANGLES: dict[str, float] = {
+    "thumb_index_angle": 0.0,
+    "wrist_finger_angle": 0.0,
+    "mcp_joint": 0.0,
+    "pip_joint": 0.0,
+    "wrist_index_angle": 0.0,
+    "index_middle_alignment": 0.0,
+}
+
+_ZERO_DISTANCES: dict[str, float] = {
+    "thumb_index_distance": 0.0,
+    "index_middle_distance": 0.0,
+    "palm_width": 0.0,
+    "thumb_index_over_palm": 0.0,
+    "index_middle_over_palm": 0.0,
+    "middle_below_index": 0.0,
+}
 
 
 def _smooth_metric_map(
@@ -43,40 +68,81 @@ def _smooth_metric_map(
 
 
 def process_frame(request: FrameRequest, *, session_key: str | None = None) -> FrameResponse:
-    # ✅ Merge: support both request landmarks AND camera fallback
     camera_runtime = get_camera_runtime()
     source_landmarks = request.landmarks if request.landmarks else camera_runtime.latest_landmarks()
 
+    metric_key = session_key or request.procedure_id
+    estimator = _JOINT_OCCLUSION_BY_SESSION.get(metric_key)
+    if estimator is None:
+        estimator = JointOcclusionEstimator()
+        _JOINT_OCCLUSION_BY_SESSION[metric_key] = estimator
+
+    joint_confidence: dict[str, float] = {}
+    landmarks_estimated = False
+
     if not source_landmarks:
-        return FrameResponse(
-            step="step_1",
-            valid=False,
-            score=0.0,
-            feedback=[],
-            landmarks=[],
-        )
+        estimate = estimator.predict(timestamp_ms=request.timestamp_ms)
+        if estimate.expired or not estimate.landmarks:
+            reset_session(procedure_id=request.procedure_id, session_key=session_key)
+
+            schema = load_procedure_schema(
+                request.procedure_id,
+                difficulty=request.difficulty,
+            )
+
+            procedure_steps = [
+                StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms)
+                for step in schema.steps
+            ]
+
+            return FrameResponse(
+                step=schema.steps[0].id,
+                valid=False,
+                score=0.0,
+                feedback=[],
+                landmarks=[],
+                joint_confidence=dict(estimate.joint_confidence),
+                landmarks_estimated=bool(estimate.estimated),
+                angles=dict(_ZERO_ANGLES),
+                distances=dict(_ZERO_DISTANCES),
+                procedure_steps=procedure_steps,
+                reset=True,
+                difficulty=request.difficulty,
+                session_saved=False,
+                fatigue=None,
+                skill_decay=None,
+            )
+
+        source_landmarks = estimate.landmarks
+        joint_confidence = dict(estimate.joint_confidence)
+        landmarks_estimated = bool(estimate.estimated)
+    else:
+        occ = estimator.observe(source_landmarks, timestamp_ms=request.timestamp_ms)
+        source_landmarks = occ.landmarks
+        joint_confidence = dict(occ.joint_confidence)
+        landmarks_estimated = bool(occ.estimated)
 
     normalized = normalize_landmarks(source_landmarks)
     smoothed = smooth_landmarks(normalized, session_key=session_key)
     angles = compute_angles(smoothed)
     distances = compute_distances(smoothed)
 
-    metric_key = session_key or request.procedure_id
     angles = _smooth_metric_map(key=metric_key, metric_name="angles", values=angles)
     distances = _smooth_metric_map(key=metric_key, metric_name="distances", values=distances)
 
-    # 1) Determine current step/session context
-    schema = load_procedure_schema(request.procedure_id)
+    schema = load_procedure_schema(request.procedure_id, difficulty=request.difficulty)
     current_step_id = get_current_step_id(
         procedure_id=request.procedure_id, session_key=session_key
     )
     step_schema = schema.step_by_id()[current_step_id]
 
-    # 2) Validate constraints
-    validation = validate_step(step=step_schema, angles=angles, distances=distances)
+    validation = validate_step(
+        step=step_schema,
+        angles=angles,
+        distances=distances,
+        scalars=distances,
+    )
 
-    # Determine MCP in-range against the procedure's MCP constraint (if any).
-    # Prefer the hold_steady range; fallback to current step; fallback to "in range".
     mcp_constraint = None
     hold_steady = schema.step_by_id().get("hold_steady")
     if hold_steady is not None:
@@ -89,7 +155,6 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         mcp_value = float(angles.get("mcp_joint", 0.0))
         mcp_in_range = float(mcp_constraint.min) <= mcp_value <= float(mcp_constraint.max)
 
-    # 3) Update step state
     step_update = update_step(
         valid_constraints=validation.valid,
         mcp_in_range=mcp_in_range,
@@ -98,14 +163,16 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         timestamp_ms=request.timestamp_ms,
     )
 
-    # 3b) Keep consistency
     step_now_schema = schema.step_by_id()[step_update.step_now]
-    validation_now = validate_step(step=step_now_schema, angles=angles, distances=distances)
+    validation_now = validate_step(
+        step=step_now_schema,
+        angles=angles,
+        distances=distances,
+        scalars=distances,
+    )
 
-    # 4) Feedback
     feedback = generate_feedback(validation=validation, step_update=step_update)
 
-    # 5) Stability scoring (session-based)
     key = metric_key
     stability_scorer = _STABILITY_BY_SESSION.get(key)
     if stability_scorer is None:
@@ -118,10 +185,60 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
 
     score = compute_score(valid=validation_now.valid, stability=stability)
 
-    # Convert schema steps to StepInfo objects
+    agg_key = key
+    aggregator = _AGGREGATORS.get(agg_key)
+    if aggregator is None:
+        aggregator = SessionAggregator(
+            student_id=request.student_id,
+            procedure_id=request.procedure_id,
+            difficulty=request.difficulty,
+        )
+        _AGGREGATORS[agg_key] = aggregator
+    elif aggregator.student_id != request.student_id:
+        # Frames often start as "anonymous" before the learner confirms; keep one
+        # aggregator per WebSocket but attribute the saved session to the confirmed id.
+        aggregator.student_id = request.student_id
+
+    aggregator.feed_frame(
+        step_id=step_update.step_now,
+        valid=validation_now.valid,
+        score=score,
+        stability=stability,
+        timestamp_ms=request.timestamp_ms,
+    )
+
+    session_saved = False
+    skill_decay: DecaySummary | None = None
+    if step_update.step_now == "completed" and step_update.advanced:
+        saved = aggregator.complete_session(timestamp_ms=request.timestamp_ms)
+        if saved is not None:
+            session_saved = True
+            _AGGREGATORS.pop(agg_key, None)
+            skill_decay = DecaySummary(**predict_decay(request.student_id))
+
     procedure_steps = [
         StepInfo(id=step.id, dwell_time_ms=step.dwell_time_ms) for step in schema.steps
     ]
+
+    fatigue_key = session_key or request.procedure_id
+    fatigue_detector = _FATIGUE_BY_SESSION.get(fatigue_key)
+    if fatigue_detector is None:
+        fatigue_detector = FatigueDetector()
+        fatigue_detector.start_session()
+        _FATIGUE_BY_SESSION[fatigue_key] = fatigue_detector
+
+    fatigue_assessment = fatigue_detector.update(
+        stability_score=stability,
+        had_error=not validation_now.valid,
+    )
+
+    fatigue_info = FatigueInfo(
+        fatigue_level=fatigue_assessment.fatigue_level.value,
+        fatigue_score=fatigue_assessment.fatigue_score,
+        recommended_break_seconds=fatigue_assessment.recommended_break_seconds,
+        session_minutes=round(fatigue_detector.session_minutes, 1),
+        warning_message=fatigue_assessment.warning_message,
+    )
 
     return FrameResponse(
         step=step_update.step_now,
@@ -129,8 +246,14 @@ def process_frame(request: FrameRequest, *, session_key: str | None = None) -> F
         score=score,
         feedback=feedback,
         landmarks=source_landmarks,
+        joint_confidence=joint_confidence,
+        landmarks_estimated=landmarks_estimated,
         angles=angles,
         distances=distances,
         procedure_steps=procedure_steps,
         reset=bool(step_update.reset),
+        difficulty=request.difficulty,
+        session_saved=session_saved,
+        fatigue=fatigue_info,
+        skill_decay=skill_decay,
     )

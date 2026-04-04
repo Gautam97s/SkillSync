@@ -12,7 +12,7 @@ export default function CameraFeed({ compact = false }: CameraFeedProps) {
   if (compact) {
     return (
       <>
-        <video ref={videoRef} autoPlay playsInline muted className="stage-video" width="640" height="480" />
+        <video ref={videoRef} autoPlay playsInline muted className="stage-video" />
         {!streamReady && <div className="stage-empty">Allow camera access to start live tracking.</div>}
       </>
     );
@@ -21,7 +21,7 @@ export default function CameraFeed({ compact = false }: CameraFeedProps) {
   return (
     <div className="card">
       <h2>Camera Feed</h2>
-      <video ref={videoRef} autoPlay playsInline muted className="video" width="640" height="480" />
+      <video ref={videoRef} autoPlay playsInline muted className="video" />
       <p>{streamReady ? "Camera connected" : "Waiting for camera permissions..."}</p>
     </div>
   );

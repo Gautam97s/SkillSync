@@ -1,10 +1,11 @@
 import sys
 import os
+import pytest
 
 # Ensure the backend directory is in the path to allow absolute imports from app module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import cv2
+cv2 = pytest.importorskip("cv2", reason="OpenCV is required for camera integration tests")
 import mediapipe as mp
 from app.features.hand_tracking.cv.hand_tracker import HandTracker
 from app.features.hand_tracking.feature_engineering.distances import compute_distances

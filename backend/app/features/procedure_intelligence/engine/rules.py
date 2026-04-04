@@ -21,6 +21,7 @@ def evaluate_constraints(
     constraints: "StepConstraints",
     angles: dict[str, float],
     distances: dict[str, float],
+    scalars: dict[str, float] | None = None,
 ) -> dict:
     """
     Evaluate a step's constraints and return a structured result:
@@ -40,6 +41,7 @@ def evaluate_constraints(
     """
     distances = _normalize_distance_keys(distances)
 
+    scalar_values = scalars or {}
     violations: list[dict] = []
 
     for key, c in (constraints.angles or {}).items():
@@ -65,13 +67,55 @@ def evaluate_constraints(
 
     for key, c in (constraints.distances or {}).items():
         actual = float(distances.get(key, 0.0))
-        if actual > c.max:
+        if c.min is not None and actual < float(c.min):
             violations.append(
                 {
                     "constraint_key": key,
-                    "expected": {"max": float(c.max)},
+                    "expected": {
+                        **({"min": float(c.min)} if c.min is not None else {}),
+                        **({"max": float(c.max)} if c.max is not None else {}),
+                    },
                     "actual": actual,
-                    "deviation_amount": float(actual - c.max),
+                    "deviation_amount": float(float(c.min) - actual),
+                }
+            )
+        elif c.max is not None and actual > float(c.max):
+            violations.append(
+                {
+                    "constraint_key": key,
+                    "expected": {
+                        **({"min": float(c.min)} if c.min is not None else {}),
+                        **({"max": float(c.max)} if c.max is not None else {}),
+                    },
+                    "actual": actual,
+                    "deviation_amount": float(actual - float(c.max)),
+                }
+            )
+
+    for key, c in (constraints.scalars or {}).items():
+        actual = float(scalar_values.get(key, 0.0))
+        if c.min is not None and actual < float(c.min):
+            violations.append(
+                {
+                    "constraint_key": key,
+                    "expected": {
+                        **({"min": float(c.min)} if c.min is not None else {}),
+                        **({"max": float(c.max)} if c.max is not None else {}),
+                    },
+                    "actual": actual,
+                    "deviation_amount": float(float(c.min) - actual),
+                }
+            )
+        elif c.max is not None and actual > float(c.max):
+            violations.append(
+                {
+                    "constraint_key": key,
+                    "expected": {
+                        **({"min": float(c.min)} if c.min is not None else {}),
+                        **({"max": float(c.max)} if c.max is not None else {}),
+                    },
+                    "actual": actual,
+                    "deviation_amount": float(actual - float(c.max)),
                 }
             )
 
@@ -89,6 +133,12 @@ def validate_step(
     step: "StepSchema",
     angles: dict[str, float],
     distances: dict[str, float],
+    scalars: dict[str, float] | None = None,
 ) -> ValidationResult:
-    result = evaluate_constraints(constraints=step.constraints, angles=angles, distances=distances)
+    result = evaluate_constraints(
+        constraints=step.constraints,
+        angles=angles,
+        distances=distances,
+        scalars=scalars,
+    )
     return ValidationResult(valid=bool(result["valid"]), violations=list(result.get("violations") or []))

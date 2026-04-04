@@ -1,0 +1,10 @@
+version: "2"
+update_channel: stable
+tunnels:
+    frontend:
+        proto: http
+        addr: 3000
+    backend:
+        proto: http
+        addr: 8000
+authtoken: 30jCbuHn5CNCJTnzcwsNSY4Wnap_5b7QTbGmTXahpZ73KuJx8

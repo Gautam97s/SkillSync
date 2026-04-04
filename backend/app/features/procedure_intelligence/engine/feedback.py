@@ -4,8 +4,13 @@ from app.features.procedure_intelligence.engine.rules import ValidationResult
 from app.features.procedure_intelligence.engine.state_machine import StepUpdate
 
 
-def _fmt_num(x: float) -> str:
-    return f"{float(x):.2f}"
+_PLAIN_FEEDBACK_BY_CONSTRAINT: dict[str, str] = {
+    "thumb_index_over_palm": "Bring your thumb and index finger a little closer.",
+    "index_middle_over_palm": "Move your middle finger closer to your index finger.",
+    "index_middle_alignment": "Keep your index and middle finger aligned.",
+    "middle_below_index": "Place your middle finger slightly below your index finger for support.",
+    "wrist_index_angle": "Adjust your wrist angle and hold it steady.",
+}
 
 
 def _violation_feedback_items(*, violations: list[dict]) -> list[FeedbackItem]:
@@ -13,46 +18,25 @@ def _violation_feedback_items(*, violations: list[dict]) -> list[FeedbackItem]:
         return [
             FeedbackItem(
                 code="CONSTRAINT_INVALID",
-                message="Constraints are invalid. Adjust your position to match the target ranges.",
+                message="You are close. Adjust your hand position slightly and try again.",
                 severity="warning",
             )
         ]
 
-    items: list[FeedbackItem] = []
-    for v in violations:
-        key = str(v.get("constraint_key") or "constraint")
-        expected = v.get("expected") or {}
-        actual = float(v.get("actual") or 0.0)
-        deviation = float(v.get("deviation_amount") or 0.0)
+    primary = violations[0]
+    key = str(primary.get("constraint_key") or "constraint")
+    plain_message = _PLAIN_FEEDBACK_BY_CONSTRAINT.get(
+        key,
+        "Adjust your grip and try to match the target position.",
+    )
 
-        direction: str
-        target_desc: str
-        if "min" in expected and actual < float(expected["min"]):
-            direction = "increase"
-            target_desc = f"at least {_fmt_num(expected['min'])}"
-        elif "max" in expected and actual > float(expected["max"]):
-            direction = "decrease"
-            target_desc = f"at most {_fmt_num(expected['max'])}"
-        elif "max" in expected:
-            # Distance constraints are max-only; if we're here it's an overage.
-            direction = "decrease"
-            target_desc = f"at most {_fmt_num(expected['max'])}"
-        else:
-            direction = "adjust"
-            target_desc = "within the allowed range"
-
-        items.append(
-            FeedbackItem(
-                code=f"{key.upper()}_VIOLATION",
-                message=(
-                    f"{key}: {direction} by {_fmt_num(deviation)} "
-                    f"(actual={_fmt_num(actual)}, target={target_desc})."
-                ),
-                severity="warning",
-            )
+    return [
+        FeedbackItem(
+            code=f"{key.upper()}_VIOLATION",
+            message=plain_message,
+            severity="warning",
         )
-
-    return items
+    ]
 
 
 def generate_feedback(
@@ -68,23 +52,15 @@ def generate_feedback(
 
     Returns list[FeedbackItem] for response compatibility.
     """
-    if not validation.valid and step_update.step_started == "grip_init":
-        return [
-            FeedbackItem(
-                code="GRIP_NOT_DETECTED",
-                message="No grip detected yet. Hold the pen between thumb and index finger before moving on.",
-                severity="warning",
-            )
-        ]
-
     if not validation.valid:
         return _violation_feedback_items(violations=list(validation.violations or []))
 
     if int(step_update.dwell_remaining_ms) > 0:
+        seconds_remaining = max(1, int((int(step_update.dwell_remaining_ms) + 999) / 1000))
         return [
             FeedbackItem(
                 code="DWELL_REMAINING",
-                message=f"Hold this position for {int(step_update.dwell_remaining_ms)} more ms.",
+                message=f"Nice. Keep holding for about {seconds_remaining} more second(s).",
                 severity="info",
             )
         ]
@@ -93,7 +69,7 @@ def generate_feedback(
         return [
             FeedbackItem(
                 code="STEP_COMPLETE",
-                message=f"Step complete, moving to {step_update.step_now}.",
+                message="Great job. Step complete, moving to the next one.",
                 severity="info",
             )
         ]
@@ -101,7 +77,7 @@ def generate_feedback(
     return [
         FeedbackItem(
             code="OK",
-            message="Constraints satisfied.",
+            message="Good form. Keep it steady.",
             severity="info",
         )
     ]
