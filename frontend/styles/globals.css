@@ -238,6 +238,38 @@ body {
   z-index: 3;
 }
 
+.mobile-fullscreen-btn {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 7;
+  border: 1px solid rgba(195, 231, 239, 0.62);
+  border-radius: 999px;
+  background: rgba(7, 38, 50, 0.74);
+  color: #e8f9fd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 7px 11px;
+  backdrop-filter: blur(6px);
+}
+
+.hand-stage:fullscreen,
+.hand-stage:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+}
+
+.hand-stage:fullscreen .mobile-fullscreen-btn,
+.hand-stage:-webkit-full-screen .mobile-fullscreen-btn {
+  top: calc(10px + env(safe-area-inset-top));
+  right: calc(10px + env(safe-area-inset-right));
+}
+
 .stage-glow {
   position: absolute;
   left: 50%;
@@ -678,6 +710,12 @@ body {
     bottom: 12px;
   }
 
+  .mobile-fullscreen-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .content-grid {
     gap: 12px;
     padding-top: 10px;
@@ -763,6 +801,11 @@ body {
     grid-template-columns: 1fr;
     gap: 8px;
     padding: 10px;
+  }
+
+  .mobile-fullscreen-btn {
+    font-size: 10px;
+    padding: 6px 10px;
   }
 
   .status-bars {

@@ -138,7 +138,9 @@ export default function HomePage() {
   const { connected, reconnecting, latest, send } = useTelemetry();
   const frameCounter = useRef(0);
   const landmarksRef = useRef<number[][]>([]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isStageFullscreen, setIsStageFullscreen] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const difficultyRef = useRef<Difficulty>("beginner");
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
@@ -190,6 +192,46 @@ export default function HomePage() {
     } catch {}
     loadUserDbData(sid);
   }, [studentId, loadUserDbData]);
+
+  const toggleStageFullscreen = useCallback(async () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+    const stageWithWebkit = stage as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+    const activeFullscreenElement = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+
+    try {
+      if (activeFullscreenElement === stage) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        }
+      } else if (stage.requestFullscreen) {
+        await stage.requestFullscreen();
+      } else if (stageWithWebkit.webkitRequestFullscreen) {
+        await stageWithWebkit.webkitRequestFullscreen();
+      }
+    } catch {
+      // Some mobile browsers can reject fullscreen requests unexpectedly.
+    }
+  }, []);
+
+  useEffect(() => {
+    const doc = document as Document & { webkitFullscreenElement?: Element | null };
+    const syncFullscreenState = () => {
+      const activeFullscreenElement = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      setIsStageFullscreen(activeFullscreenElement === stageRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     const handleLandmarks = (event: Event) => {
@@ -469,7 +511,15 @@ export default function HomePage() {
                 <button id="difficulty-intermediate" className={`diff-pill ${difficulty === "intermediate" ? "diff-pill--active" : ""}`} onClick={() => { setDifficulty("intermediate"); difficultyRef.current = "intermediate"; }} aria-pressed={difficulty === "intermediate"}>Intermediate</button>
               </div>
             </div>
-            <div className="hand-stage" aria-label="Live hand stage">
+            <div ref={stageRef} className="hand-stage" aria-label="Live hand stage">
+              <button
+                type="button"
+                className="mobile-fullscreen-btn"
+                onClick={() => { void toggleStageFullscreen(); }}
+                aria-label={isStageFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isStageFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              </button>
               <div className="stage-glow" />
               <CameraFeed compact />
               <HandOverlay variant={overlayVariant} />
